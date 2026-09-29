@@ -36,8 +36,10 @@ export const TaskModal: React.FC = () => {
   const [outcomeNotes, setOutcomeNotes] = useState('');
 
   const [isUnscheduled, setIsUnscheduled] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   useEffect(() => {
+    setIsConfirmingDelete(false);
     if (editingTask) {
       setTitle(editingTask.title);
       setType(editingTask.type);
@@ -119,7 +121,7 @@ export const TaskModal: React.FC = () => {
   };
 
   const handleDelete = () => {
-    if (editingTask && window.confirm('Delete this task from your schedule?')) {
+    if (editingTask) {
       deleteTask(editingTask.id);
       closeTaskModal();
     }
@@ -379,14 +381,34 @@ export const TaskModal: React.FC = () => {
           {/* Action buttons */}
           <div className="flex items-center justify-between pt-3 border-t border-neutral-200">
             {editingTask ? (
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-rose-700 hover:text-rose-900 hover:bg-rose-50 rounded-md transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete
-              </button>
+              isConfirmingDelete ? (
+                <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 p-1 rounded-md">
+                  <span className="text-xs text-rose-700 font-semibold px-1">Delete task?</span>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    className="px-2 py-1 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded transition-colors"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsConfirmingDelete(false)}
+                    className="px-2 py-1 text-xs text-neutral-600 hover:text-neutral-900"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingDelete(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-rose-700 hover:text-rose-900 hover:bg-rose-50 rounded-md transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete
+                </button>
+              )
             ) : (
               <div />
             )}

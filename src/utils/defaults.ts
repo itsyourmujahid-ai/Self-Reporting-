@@ -149,6 +149,22 @@ export const DEFAULT_TEMPLATES: TaskTemplate[] = [
     notes: 'Long-form practical guide with diagrams and checklist.',
     recurrenceTag: 'blog_post',
   },
+  {
+    id: 'tmpl-monthly-report',
+    title: 'Monthly Self Report',
+    type: 'recurring',
+    frequency: 'monthly',
+    monthlyRule: 'last_working_day',
+    daysOfWeek: [],
+    dayOfMonth: 30,
+    preferredTime: '16:00',
+    estimatedDuration: 60,
+    category: 'Planning',
+    priority: 'high',
+    active: true,
+    notes: 'Review monthly accomplishment metrics, log delays, and finalize executive self-report.',
+    recurrenceTag: 'monthly_report',
+  },
 ];
 
 /**
@@ -369,6 +385,26 @@ export function generateInitialTasks(): Task[] {
   }
 
   // Add specialized Meetings and Follow-ups
+  // Today's Meeting: 13:30 Commercial Terms Alignment with Apex
+  tasks.push({
+    id: 'task-meeting-apex-today',
+    title: 'Commercial Terms Alignment with Apex',
+    type: 'meeting',
+    date: '2026-09-29',
+    startTime: '13:30',
+    endTime: '14:30',
+    durationMinutes: 60,
+    status: 'planned',
+    priority: 'high',
+    notes: 'Review finalized quotation pricing, dispatch timelines, and SLA provisions.',
+    category: 'Meetings',
+    project: 'Client Relations',
+    meetingWith: 'David Miller (Apex Retailers)',
+    locationOrLink: 'Conference Room 2 / Google Meet',
+    createdAt: '2026-09-25T09:00:00Z',
+    isImportant: true,
+  });
+
   // Today's Follow-up: 17:00 Follow-up — ABC Company (as in prompt example!)
   tasks.push({
     id: 'task-followup-abc',
@@ -465,6 +501,26 @@ export function generateInitialTasks(): Task[] {
     completedAt: '2026-09-23T11:45:00Z',
   });
 
+  // End of Month Self Report on Sep 30 (Last working day of the month)
+  tasks.push({
+    id: 'task-monthly-report-sep',
+    title: 'Monthly Self Report',
+    type: 'recurring',
+    date: '2026-09-30',
+    startTime: '16:00',
+    endTime: '17:00',
+    durationMinutes: 60,
+    status: 'planned',
+    priority: 'high',
+    notes: 'Review month accomplishments, completion rates, log bottlenecks, and finalize executive self-report.',
+    category: 'Planning',
+    project: 'Core Routine',
+    createdAt: '2026-09-01T08:00:00Z',
+    recurrenceTag: 'monthly_report',
+    templateId: 'tmpl-monthly-report',
+    isImportant: true,
+  });
+
   return tasks;
 }
 
@@ -481,6 +537,7 @@ export const INITIAL_WEEKLY_REPORTS: WeeklyReportRecord[] = [
       failedOrDelayed: 'Delayed Thursday reel publication by one day due to video rendering setup.',
       causesOfDelays: 'Had unexpected logistics emergency on seller return shipments.',
       nextWeekFocus: 'Prepare client quotation drafts earlier in the morning block.',
+      importantNotes: 'Consistently reviewing daily schedule in the morning reduced operational drift.',
     },
   },
 ];
@@ -496,6 +553,7 @@ export const INITIAL_MONTHLY_REPORTS: MonthlyReportRecord[] = [
       missedGoals: 'Missed 2 X threads during week 3 travel.',
       lessonsLearned: 'Strict time blocking for cold calls at 15:00 prevents afternoon procrastination.',
       nextMonthPriorities: 'Scale up seller onboarding pipeline and finalize Q4 content editorial calendar.',
+      importantNotes: 'Dedicated meeting slots at 14:00 keep morning deep work uninterrupted.',
     },
   },
 ];

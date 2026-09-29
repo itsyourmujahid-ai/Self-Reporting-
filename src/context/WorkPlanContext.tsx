@@ -32,6 +32,7 @@ import {
   getWeekRange,
   addMinutesToTime,
   getWeekIdentifier,
+  isTaskOverdue,
 } from '../utils/dateUtils';
 
 interface DailyStats {
@@ -41,6 +42,7 @@ interface DailyStats {
   pending: number;
   inProgress: number;
   skipped: number;
+  overdue: number;
   rescheduled: number;
   completionRate: number;
 }
@@ -48,8 +50,10 @@ interface DailyStats {
 interface PeriodStats {
   total: number;
   completed: number;
+  remaining: number;
   pending: number;
   skipped: number;
+  overdue: number;
   rescheduled: number;
   completionRate: number;
   byType: Record<TaskType, { total: number; completed: number }>;
@@ -503,6 +507,31 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       const newGeneratedTasks: Task[] = [];
 
+      // Precalculate first and last working days of the month for monthly recurring rules
+      let lastWorkingDayOfMonth = lastDay;
+      for (let d = lastDay; d >= 1; d--) {
+        const dObj = new Date(year, monthIndex, d);
+        const dow = dObj.getDay();
+        const isOff = config.weeklyOffDays.includes(dow);
+        const isWork = config.workingDays ? config.workingDays.includes(dow) : !isOff;
+        if (!isOff && isWork) {
+          lastWorkingDayOfMonth = d;
+          break;
+        }
+      }
+
+      let firstWorkingDayOfMonth = 1;
+      for (let d = 1; d <= lastDay; d++) {
+        const dObj = new Date(year, monthIndex, d);
+        const dow = dObj.getDay();
+        const isOff = config.weeklyOffDays.includes(dow);
+        const isWork = config.workingDays ? config.workingDays.includes(dow) : !isOff;
+        if (!isOff && isWork) {
+          firstWorkingDayOfMonth = d;
+          break;
+        }
+      }
+
       for (let d = 1; d <= lastDay; d++) {
         const dateObj = new Date(year, monthIndex, d);
         const dateISO = formatISODate(dateObj);
@@ -511,12 +540,22 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const isWorkingDay = config.workingDays ? config.workingDays.includes(dayOfWeek) : !isOffDay;
 
         activeTmpls.forEach(tmpl => {
+          // Check date bounds if configured on the template
+          if (tmpl.startDate && dateISO < tmpl.startDate) {
+            return;
+          }
+          if (tmpl.endDate && dateISO > tmpl.endDate) {
+            return;
+          }
+
           let shouldGenerate = false;
 
           // Frequency logic
           if (tmpl.frequency === 'daily') {
-            // Daily tasks generate on working days (avoiding weekly off days)
-            if (!isOffDay && isWorkingDay) {
+            // Daily tasks generate on working days by default
+            if (tmpl.generateOnlyOnWorkingDays === false) {
+              shouldGenerate = true;
+            } else if (!isOffDay && isWorkingDay) {
               shouldGenerate = true;
             }
           } else if (tmpl.frequency === 'weekly' || tmpl.frequency === 'multiple_times_per_week' || tmpl.frequency === 'custom') {
@@ -525,11 +564,19 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               shouldGenerate = true;
             }
           } else if (tmpl.frequency === 'monthly') {
-            // Monthly frequency: specific day of month (default: 1st)
-            const targetDayOfMonth = tmpl.dayOfMonth || 1;
-            if (d === targetDayOfMonth) {
-              // If off-day, we can generate on the day or if restricted, user can reschedule
-              shouldGenerate = true;
+            if (tmpl.monthlyRule === 'last_working_day' || tmpl.recurrenceTag === 'monthly_report') {
+              if (d === lastWorkingDayOfMonth) {
+                shouldGenerate = true;
+              }
+            } else if (tmpl.monthlyRule === 'first_working_day') {
+              if (d === firstWorkingDayOfMonth) {
+                shouldGenerate = true;
+              }
+            } else {
+              const targetDayOfMonth = tmpl.dayOfMonth || 1;
+              if (d === targetDayOfMonth) {
+                shouldGenerate = true;
+              }
             }
           }
 
@@ -757,8 +804,9 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const inProgress = dayTasks.filter(t => t.status === 'in_progress').length;
       const skipped = dayTasks.filter(t => t.status === 'skipped').length;
       const rescheduled = dayTasks.filter(t => t.status === 'rescheduled').length;
+      const overdue = dayTasks.filter(t => isTaskOverdue(t.date, t.startTime, t.status)).length;
       const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-      const remaining = pending + inProgress;
+      const remaining = pending + inProgress + rescheduled;
 
       return {
         total,
@@ -767,6 +815,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         pending,
         inProgress,
         skipped,
+        overdue,
         rescheduled,
         completionRate,
       };
@@ -782,6 +831,8 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const pending = periodTasks.filter(t => t.status === 'planned' || t.status === 'in_progress').length;
       const skipped = periodTasks.filter(t => t.status === 'skipped').length;
       const rescheduled = periodTasks.filter(t => t.status === 'rescheduled').length;
+      const remaining = pending + rescheduled;
+      const overdue = periodTasks.filter(t => isTaskOverdue(t.date, t.startTime, t.status)).length;
       const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
       const byType: Record<TaskType, { total: number; completed: number }> = {
@@ -813,8 +864,10 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return {
         total,
         completed,
+        remaining,
         pending,
         skipped,
+        overdue,
         rescheduled,
         completionRate,
         byType,
@@ -833,6 +886,8 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const pending = monthTasks.filter(t => t.status === 'planned' || t.status === 'in_progress').length;
       const skipped = monthTasks.filter(t => t.status === 'skipped').length;
       const rescheduled = monthTasks.filter(t => t.status === 'rescheduled').length;
+      const remaining = pending + rescheduled;
+      const overdue = monthTasks.filter(t => isTaskOverdue(t.date, t.startTime, t.status)).length;
       const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
       const byType: Record<TaskType, { total: number; completed: number }> = {
@@ -896,8 +951,10 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return {
         total,
         completed,
+        remaining,
         pending,
         skipped,
+        overdue,
         rescheduled,
         completionRate,
         byType,

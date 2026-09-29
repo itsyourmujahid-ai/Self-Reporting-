@@ -197,8 +197,13 @@ export const WeeklyPlannerView: React.FC = () => {
                             onClick={() => openEditTask(t)}
                           >
                             <div className="flex items-center justify-between text-[10px] font-mono text-neutral-500">
-                              <span>{t.startTime}</span>
-                              <span className="capitalize">{t.type.replace('_', ' ')}</span>
+                              <span>{t.startTime || 'Unscheduled'}</span>
+                              <div className="flex items-center gap-1">
+                                {t.status === 'in_progress' && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" title="Active in progress" />
+                                )}
+                                <span className="capitalize">{t.type.replace('_', ' ')}</span>
+                              </div>
                             </div>
                             <p
                               className={`font-medium text-xs truncate mt-0.5 ${

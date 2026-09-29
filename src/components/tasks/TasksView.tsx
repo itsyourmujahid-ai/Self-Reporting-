@@ -25,12 +25,15 @@ type SortOption = 'date_asc' | 'date_desc' | 'time' | 'priority' | 'status';
 export const TasksView: React.FC = () => {
   const {
     tasks,
+    toggleTaskStatus,
     startTask,
     completeTask,
     skipTask,
     rescheduleTask,
     openEditTask,
     openCreateTask,
+    openFollowUpModal,
+    openMeetingModal,
     deleteTask,
   } = useWorkPlan();
 
@@ -46,6 +49,9 @@ export const TasksView: React.FC = () => {
   const [reschedulingTaskId, setReschedulingTaskId] = useState<string | null>(null);
   const [rescheduleDateInput, setRescheduleDateInput] = useState<string>('');
   const [rescheduleTimeInput, setRescheduleTimeInput] = useState<string>('');
+
+  // Inline Delete State
+  const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null);
 
   const todayISO = getTodayISO();
   const weekRange = getWeekRange(todayISO);
@@ -334,7 +340,7 @@ export const TasksView: React.FC = () => {
                       {/* Status / Complete Toggle */}
                       <td className="py-2 px-3 text-center">
                         <button
-                          onClick={() => (isDone ? startTask(t.id) : completeTask(t.id))}
+                          onClick={() => toggleTaskStatus(t.id)}
                           className="text-neutral-400 hover:text-neutral-900 transition-colors"
                           title={isDone ? 'Reopen Task' : 'Complete Task'}
                         >
@@ -384,6 +390,21 @@ export const TasksView: React.FC = () => {
                           )}
                         </div>
 
+                        {t.contactName && (
+                          <div className="text-[11px] text-amber-800 font-medium mt-0.5">
+                            Contact: {t.contactName}
+                          </div>
+                        )}
+                        {t.meetingWith && (
+                          <div className="text-[11px] text-blue-800 font-medium mt-0.5">
+                            Meeting: {t.meetingWith}
+                          </div>
+                        )}
+                        {t.outcomeNotes && (
+                          <div className="text-[10px] text-blue-900 bg-blue-50/70 border border-blue-200/60 p-1 rounded mt-0.5">
+                            Outcome: {t.outcomeNotes}
+                          </div>
+                        )}
                         {t.notes && (
                           <div className="text-[11px] text-neutral-500 truncate max-w-sm mt-0.5">
                             {t.notes}
@@ -419,6 +440,26 @@ export const TasksView: React.FC = () => {
                       {/* Actions */}
                       <td className="py-2 px-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
+                          {t.type === 'meeting' && !isDone && (
+                            <button
+                              onClick={() => openMeetingModal(t)}
+                              className="text-[10px] font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200"
+                              title="Conclude Meeting"
+                            >
+                              Conclude
+                            </button>
+                          )}
+
+                          {t.type === 'follow_up' && !isDone && (
+                            <button
+                              onClick={() => openFollowUpModal(t)}
+                              className="text-[10px] font-semibold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200"
+                              title="Complete & Schedule Next Follow-up"
+                            >
+                              Follow-up
+                            </button>
+                          )}
+
                           {!isDone && !isInProgress && !isSkipped && (
                             <button
                               onClick={() => startTask(t.id)}
@@ -459,17 +500,34 @@ export const TasksView: React.FC = () => {
                             <FileEdit className="w-3.5 h-3.5" />
                           </button>
 
-                          <button
-                            onClick={() => {
-                              if (window.confirm(`Delete "${t.title}"?`)) {
-                                deleteTask(t.id);
-                              }
-                            }}
-                            className="p-1 text-neutral-400 hover:text-rose-600 rounded"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {confirmDeleteTaskId === t.id ? (
+                            <span className="inline-flex items-center gap-1 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded text-[11px]">
+                              <span className="text-rose-700 font-semibold">Delete?</span>
+                              <button
+                                onClick={() => {
+                                  deleteTask(t.id);
+                                  setConfirmDeleteTaskId(null);
+                                }}
+                                className="text-rose-800 font-bold hover:underline px-0.5"
+                              >
+                                Yes
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteTaskId(null)}
+                                className="text-neutral-500 hover:text-neutral-800 px-0.5"
+                              >
+                                No
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmDeleteTaskId(t.id)}
+                              className="p-1 text-neutral-400 hover:text-rose-600 rounded"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
 
                         {/* Inline Reschedule row if open */}

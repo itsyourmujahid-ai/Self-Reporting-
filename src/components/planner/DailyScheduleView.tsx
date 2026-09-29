@@ -29,6 +29,8 @@ import {
   Sparkles,
   MessageSquare,
   Save,
+  CalendarCheck,
+  PhoneCall,
 } from 'lucide-react';
 import { Task, TaskPriority, TaskStatus, TaskType } from '../../types';
 
@@ -37,6 +39,7 @@ export const DailyScheduleView: React.FC = () => {
     tasks,
     selectedDate,
     setSelectedDate,
+    toggleTaskStatus,
     startTask,
     completeTask,
     skipTask,
@@ -45,6 +48,7 @@ export const DailyScheduleView: React.FC = () => {
     saveDailyNotes,
     deleteTask,
     addTask,
+    openCreateTask,
     openEditTask,
     openFollowUpModal,
     openMeetingModal,
@@ -57,6 +61,9 @@ export const DailyScheduleView: React.FC = () => {
   const isOffDay = isWeeklyOff(selectedDate, settings.weeklyOffDays);
   const stats = getDailyStats(selectedDate);
 
+  // Inline delete confirmation state
+  const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null);
+
   // Quick Add State
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickTitle, setQuickTitle] = useState('');
@@ -66,6 +73,9 @@ export const DailyScheduleView: React.FC = () => {
   const [quickDuration, setQuickDuration] = useState(30);
   const [quickPriority, setQuickPriority] = useState<TaskPriority>('medium');
   const [quickNotes, setQuickNotes] = useState('');
+  const [quickContactName, setQuickContactName] = useState('');
+  const [quickMeetingWith, setQuickMeetingWith] = useState('');
+  const [quickLocation, setQuickLocation] = useState('');
 
   // Skip Modal State
   const [skippingTaskId, setSkippingTaskId] = useState<string | null>(null);
@@ -110,6 +120,34 @@ export const DailyScheduleView: React.FC = () => {
     return { scheduledTasks: scheduled, unscheduledTasks: unscheduled };
   }, [tasks, selectedDate]);
 
+  // Overlap / Time conflict detection for scheduled tasks
+  const conflictingTaskIds = useMemo(() => {
+    const conflicts = new Set<string>();
+    const toMinutes = (timeStr?: string) => {
+      if (!timeStr) return 0;
+      const [h, m] = timeStr.split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    };
+
+    for (let i = 0; i < scheduledTasks.length; i++) {
+      const a = scheduledTasks[i];
+      if (!a.startTime) continue;
+      const aStart = toMinutes(a.startTime);
+      const aEnd = aStart + (a.durationMinutes || 30);
+      for (let j = i + 1; j < scheduledTasks.length; j++) {
+        const b = scheduledTasks[j];
+        if (!b.startTime) continue;
+        const bStart = toMinutes(b.startTime);
+        const bEnd = bStart + (b.durationMinutes || 30);
+        if (aStart < bEnd && bStart < aEnd) {
+          conflicts.add(a.id);
+          conflicts.add(b.id);
+        }
+      }
+    }
+    return conflicts;
+  }, [scheduledTasks]);
+
   // Check if all scheduled tasks are completed
   const isDayComplete =
     stats.total > 0 && stats.remaining === 0 && stats.completed > 0;
@@ -146,11 +184,17 @@ export const DailyScheduleView: React.FC = () => {
       priority: quickPriority,
       notes: quickNotes.trim(),
       category: quickType === 'meeting' ? 'Meetings' : quickType === 'follow_up' ? 'Follow-up' : 'General',
+      contactName: quickType === 'follow_up' ? quickContactName.trim() : undefined,
+      meetingWith: quickType === 'meeting' ? quickMeetingWith.trim() : undefined,
+      locationOrLink: quickType === 'meeting' ? quickLocation.trim() : undefined,
     });
 
     // Reset
     setQuickTitle('');
     setQuickNotes('');
+    setQuickContactName('');
+    setQuickMeetingWith('');
+    setQuickLocation('');
     setShowQuickAdd(false);
   };
 
@@ -232,21 +276,39 @@ export const DailyScheduleView: React.FC = () => {
           </h2>
         </div>
 
-        {/* Off Day Indicator & Add Task Button */}
-        <div className="flex items-center gap-3">
+        {/* Off Day Indicator & Add Buttons */}
+        <div className="flex items-center gap-2 flex-wrap">
           {isOffDay ? (
-            <span className="text-amber-800 bg-amber-50 border border-amber-300 font-semibold text-xs px-2.5 py-1 rounded">
+            <span className="text-amber-800 bg-amber-50 border border-amber-300 font-semibold text-xs px-2 py-1 rounded">
               OFF DAY
             </span>
           ) : (
-            <span className="text-neutral-700 bg-neutral-100 border border-neutral-200 font-medium text-xs px-2.5 py-1 rounded">
+            <span className="text-neutral-700 bg-neutral-100 border border-neutral-200 font-medium text-xs px-2 py-1 rounded">
               Working Day
             </span>
           )}
 
           <button
+            onClick={() => openCreateTask(selectedDate, 'meeting')}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded-md transition-colors"
+            title="Schedule a meeting for this date"
+          >
+            <CalendarCheck className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden sm:inline">+ Meeting</span>
+          </button>
+
+          <button
+            onClick={() => openCreateTask(selectedDate, 'follow_up')}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 rounded-md transition-colors"
+            title="Schedule a follow-up for this date"
+          >
+            <PhoneCall className="w-3.5 h-3.5 text-purple-600" />
+            <span className="hidden sm:inline">+ Follow-up</span>
+          </button>
+
+          <button
             onClick={() => setShowQuickAdd(!showQuickAdd)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-neutral-900 hover:bg-neutral-800 rounded-md transition-colors shadow-xs"
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-neutral-900 hover:bg-neutral-800 rounded-md transition-colors shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Task</span>
@@ -254,79 +316,49 @@ export const DailyScheduleView: React.FC = () => {
         </div>
       </div>
 
-      {/* OFF DAY BANNER (Requirement 22) */}
-      {isOffDay && (
-        <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-lg flex items-center justify-between text-xs text-amber-900">
-          <div className="flex items-center gap-2">
-            <span className="font-bold uppercase tracking-wider text-[11px] text-amber-800">
-              Weekend / Off Day
+      {/* Day Progress Summary Strip (Calm and minimal) */}
+      <div className="bg-neutral-50/70 border border-neutral-200/80 rounded-lg p-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-neutral-900">
+              {stats.completed} of {stats.total} completed
             </span>
-            <span>·</span>
-            <span>
-              {stats.total > 0
-                ? `${stats.total} task${stats.total === 1 ? '' : 's'} intentionally scheduled on this off day.`
-                : 'No regular tasks generated. You can still schedule special tasks or follow-ups anytime.'}
+            <span className="text-neutral-300">·</span>
+            <span className="font-mono text-neutral-600 font-medium">{stats.completionRate}%</span>
+            <span className="text-neutral-300">·</span>
+            <span className="text-neutral-600">{stats.remaining} remaining</span>
+            {stats.skipped > 0 && (
+              <>
+                <span className="text-neutral-300">·</span>
+                <span className="text-neutral-500">{stats.skipped} skipped</span>
+              </>
+            )}
+            {stats.rescheduled > 0 && (
+              <>
+                <span className="text-neutral-300">·</span>
+                <span className="text-blue-700">{stats.rescheduled} rescheduled</span>
+              </>
+            )}
+          </div>
+
+          {isOffDay && (
+            <span className="text-amber-800 text-[11px] font-medium">
+              Scheduled Off Day
             </span>
-          </div>
-        </div>
-      )}
-
-      {/* 2. PROGRESS RIBBON (Requirement 10 & 11) */}
-      <div className="bg-white border border-neutral-200 rounded-lg p-5 shadow-xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-100">
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold font-mono text-neutral-900 tabular-nums">
-                {stats.total} Tasks
-              </span>
-              <span className="text-xs text-neutral-500">scheduled for this day</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-neutral-600 mt-1 font-mono">
-              <span className="font-semibold text-emerald-700">{stats.completed} Completed</span>
-              <span>·</span>
-              <span className="font-semibold text-neutral-800">{stats.remaining} Remaining</span>
-              {stats.skipped > 0 && (
-                <>
-                  <span>·</span>
-                  <span className="text-neutral-500">{stats.skipped} Skipped</span>
-                </>
-              )}
-              {stats.rescheduled > 0 && (
-                <>
-                  <span>·</span>
-                  <span className="text-blue-700">{stats.rescheduled} Rescheduled</span>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="text-right self-start sm:self-auto">
-            <div className="text-2xl font-bold font-mono text-neutral-900 tabular-nums">
-              {stats.completionRate}%
-            </div>
-            <span className="text-xs font-mono text-neutral-500">Completion</span>
-          </div>
+          )}
         </div>
 
-        {/* Progress Bar */}
-        <div>
-          <div className="w-full bg-neutral-100 rounded-full h-2 overflow-hidden">
-            <div
-              className="bg-neutral-900 h-2 transition-all duration-300"
-              style={{ width: `${stats.completionRate}%` }}
-            />
-          </div>
+        <div className="mt-2 w-full bg-neutral-200/80 rounded-full h-1.5 overflow-hidden">
+          <div
+            className="bg-neutral-900 h-1.5 transition-all duration-300"
+            style={{ width: `${stats.completionRate}%` }}
+          />
         </div>
 
-        {/* Day Complete Banner (Requirement 12) */}
         {isDayComplete && (
-          <div className="p-3 bg-neutral-900 text-white rounded-md flex items-center justify-between text-xs mt-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span className="font-semibold">Day Complete</span>
-              <span>— All scheduled tasks for this date have been completed.</span>
-            </div>
-          </div>
+          <p className="mt-2 text-xs text-neutral-700 font-medium">
+            All scheduled tasks for today are completed.
+          </p>
         )}
       </div>
 
@@ -398,6 +430,51 @@ export const DailyScheduleView: React.FC = () => {
               </select>
             </div>
           </div>
+
+          {/* Conditional Fields for Follow-up and Meeting */}
+          {quickType === 'follow_up' && (
+            <div className="p-3 bg-amber-50/60 border border-amber-200/70 rounded-md">
+              <label className="block text-[11px] font-semibold text-amber-900 mb-1">
+                Contact Name / Company (Follow-Up Target)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Sarah Jenkins (ABC Company)"
+                value={quickContactName}
+                onChange={e => setQuickContactName(e.target.value)}
+                className="w-full px-2.5 py-1 text-xs border border-amber-300 rounded bg-white focus:ring-1 focus:ring-neutral-900"
+              />
+            </div>
+          )}
+
+          {quickType === 'meeting' && (
+            <div className="p-3 bg-blue-50/60 border border-blue-200/70 rounded-md grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-blue-900 mb-1">
+                  Meeting With (Attendees)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Marcus Vance (Horizon Supplies)"
+                  value={quickMeetingWith}
+                  onChange={e => setQuickMeetingWith(e.target.value)}
+                  className="w-full px-2.5 py-1 text-xs border border-blue-300 rounded bg-white focus:ring-1 focus:ring-neutral-900"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-blue-900 mb-1">
+                  Location or Video Link
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. https://meet.google.com/xyz or Room 4"
+                  value={quickLocation}
+                  onChange={e => setQuickLocation(e.target.value)}
+                  className="w-full px-2.5 py-1 text-xs border border-blue-300 rounded bg-white focus:ring-1 focus:ring-neutral-900"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
             <div>
@@ -582,6 +659,14 @@ export const DailyScheduleView: React.FC = () => {
                               </span>
                             )}
 
+                            {/* Time Overlap Conflict Badge */}
+                            {conflictingTaskIds.has(task.id) && !isCompleted && !isSkipped && (
+                              <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.2 rounded font-mono inline-flex items-center gap-1" title="Time conflict: this task overlaps with another scheduled task">
+                                <Clock className="w-2.5 h-2.5 text-amber-600" />
+                                Overlap
+                              </span>
+                            )}
+
                             {/* Skipped Badge */}
                             {isSkipped && (
                               <span className="text-[10px] font-medium text-neutral-600 bg-neutral-100 border border-neutral-200 px-1.5 py-0.2 rounded">
@@ -610,16 +695,35 @@ export const DailyScheduleView: React.FC = () => {
                             {task.contactName && (
                               <>
                                 <span>·</span>
-                                <span className="text-neutral-700 font-medium">Contact: {task.contactName}</span>
+                                <span className="text-neutral-800 font-medium bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded">
+                                  Contact: {task.contactName}
+                                </span>
                               </>
                             )}
                             {task.meetingWith && (
                               <>
                                 <span>·</span>
-                                <span className="text-neutral-700 font-medium">Meeting: {task.meetingWith}</span>
+                                <span className="text-neutral-800 font-medium bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded">
+                                  Meeting: {task.meetingWith}
+                                </span>
                               </>
                             )}
                           </div>
+
+                          {/* Location or Link for meetings */}
+                          {task.locationOrLink && (
+                            <div className="text-[11px] text-blue-700 flex items-center gap-1">
+                              <span className="text-neutral-400">Location/Link:</span>
+                              <span className="font-mono">{task.locationOrLink}</span>
+                            </div>
+                          )}
+
+                          {/* Outcome Notes for concluded meetings */}
+                          {task.outcomeNotes && (
+                            <p className="text-xs text-blue-900 bg-blue-50/70 border border-blue-200/60 p-2 rounded mt-1">
+                              <strong className="font-semibold">Outcome:</strong> {task.outcomeNotes}
+                            </p>
+                          )}
 
                           {/* Skip Reason if skipped */}
                           {task.skippedReason && (
@@ -676,6 +780,42 @@ export const DailyScheduleView: React.FC = () => {
 
                       {/* Right Block: Task Action Buttons (Start, Complete, Skip, Reschedule, Edit) */}
                       <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto pt-2 sm:pt-0">
+                        {/* Specialized Meeting Conclude Action */}
+                        {task.type === 'meeting' && !isCompleted && !isSkipped && (
+                          <button
+                            onClick={() => openMeetingModal(task)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded transition-colors shadow-xs"
+                            title="Conclude Meeting & Record Decisions"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Conclude</span>
+                          </button>
+                        )}
+
+                        {/* Specialized Follow-Up Chain Action */}
+                        {task.type === 'follow_up' && !isCompleted && !isSkipped && (
+                          <button
+                            onClick={() => openFollowUpModal(task)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 rounded transition-colors shadow-xs"
+                            title="Complete & Schedule Next Follow-Up"
+                          >
+                            <ArrowRight className="w-3.5 h-3.5" />
+                            <span>Follow-up</span>
+                          </button>
+                        )}
+
+                        {/* Cold Call / Outreach -> Schedule Meeting shortcut */}
+                        {task.type !== 'meeting' && (task.title.toLowerCase().includes('call') || task.category === 'Outreach' || task.category === 'Sales') && !isCompleted && !isSkipped && (
+                          <button
+                            onClick={() => openCreateTask(task.date, 'meeting')}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors"
+                            title="Schedule meeting resulting from this call"
+                          >
+                            <CalendarCheck className="w-3 h-3 text-blue-600" />
+                            <span className="hidden md:inline">+ Meeting</span>
+                          </button>
+                        )}
+
                         {/* 1. START TASK (Requirement 5) */}
                         {!isCompleted && !isSkipped && (
                           isInProgress ? (
@@ -714,7 +854,7 @@ export const DailyScheduleView: React.FC = () => {
                         {/* If Completed, option to reopen/uncheck */}
                         {isCompleted && (
                           <button
-                            onClick={() => startTask(task.id)}
+                            onClick={() => toggleTaskStatus(task.id)}
                             className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-neutral-600 hover:text-neutral-900 border border-neutral-200 rounded"
                             title="Reopen Task"
                           >
@@ -759,18 +899,35 @@ export const DailyScheduleView: React.FC = () => {
                           <FileEdit className="w-3.5 h-3.5" />
                         </button>
 
-                        {/* DELETE */}
-                        <button
-                          onClick={() => {
-                            if (window.confirm(`Delete "${task.title}"?`)) {
-                              deleteTask(task.id);
-                            }
-                          }}
-                          className="p-1.5 text-neutral-400 hover:text-rose-600 rounded hover:bg-rose-50"
-                          title="Delete Task"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {/* DELETE with inline confirmation */}
+                        {confirmDeleteTaskId === task.id ? (
+                          <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 p-1 rounded">
+                            <span className="text-[10px] text-rose-700 font-semibold px-1">Delete?</span>
+                            <button
+                              onClick={() => {
+                                deleteTask(task.id);
+                                setConfirmDeleteTaskId(null);
+                              }}
+                              className="px-1.5 py-0.5 text-[10px] font-bold text-white bg-rose-600 hover:bg-rose-700 rounded"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteTaskId(null)}
+                              className="px-1 py-0.5 text-[10px] text-neutral-600 hover:text-neutral-900"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteTaskId(task.id)}
+                            className="p-1.5 text-neutral-400 hover:text-rose-600 rounded hover:bg-rose-50"
+                            title="Delete Task"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -805,7 +962,7 @@ export const DailyScheduleView: React.FC = () => {
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <button
-                      onClick={() => (isDone ? startTask(t.id) : completeTask(t.id))}
+                      onClick={() => toggleTaskStatus(t.id)}
                       className="text-neutral-400 hover:text-neutral-900"
                     >
                       {isDone ? (
@@ -835,6 +992,28 @@ export const DailyScheduleView: React.FC = () => {
 
                   {/* Assign Time or Reschedule */}
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {t.type === 'meeting' && !isDone && (
+                      <button
+                        onClick={() => openMeetingModal(t)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded transition-colors shadow-xs"
+                        title="Conclude Meeting"
+                      >
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Conclude</span>
+                      </button>
+                    )}
+
+                    {t.type === 'follow_up' && !isDone && (
+                      <button
+                        onClick={() => openFollowUpModal(t)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 rounded transition-colors shadow-xs"
+                        title="Complete & Schedule Next Follow-up"
+                      >
+                        <ArrowRight className="w-3 h-3" />
+                        <span>Follow-up</span>
+                      </button>
+                    )}
+
                     <button
                       onClick={() => {
                         setReschedulingTask(t);
@@ -991,6 +1170,57 @@ export const DailyScheduleView: React.FC = () => {
                   onChange={e => setRescheduleDate(e.target.value)}
                   className="w-full px-2.5 py-1.5 text-xs border border-neutral-300 rounded font-mono bg-white"
                 />
+
+                {/* Quick Date Presets */}
+                <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                  <span className="text-neutral-400 text-[10px]">Move to:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = parseISODate(rescheduleDate || selectedDate);
+                      d.setDate(d.getDate() + 1);
+                      setRescheduleDate(formatISODate(d));
+                    }}
+                    className="px-1.5 py-0.5 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-[10px]"
+                  >
+                    Tomorrow
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = parseISODate(rescheduleDate || selectedDate);
+                      d.setDate(d.getDate() + 3);
+                      setRescheduleDate(formatISODate(d));
+                    }}
+                    className="px-1.5 py-0.5 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-[10px]"
+                  >
+                    +3 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = parseISODate(rescheduleDate || selectedDate);
+                      d.setDate(d.getDate() + 7);
+                      setRescheduleDate(formatISODate(d));
+                    }}
+                    className="px-1.5 py-0.5 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-[10px]"
+                  >
+                    +1 Week
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = parseISODate(rescheduleDate || selectedDate);
+                      const day = d.getDay();
+                      const daysUntilMonday = ((1 - day + 7) % 7) || 7;
+                      d.setDate(d.getDate() + daysUntilMonday);
+                      setRescheduleDate(formatISODate(d));
+                    }}
+                    className="px-1.5 py-0.5 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-[10px]"
+                  >
+                    Next Monday
+                  </button>
+                </div>
               </div>
 
               <div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useWorkPlan } from '../../context/WorkPlanContext';
-import { X, Calendar, ArrowRight } from 'lucide-react';
+import { X, Calendar, ArrowRight, CheckCircle2, User, Clock, FileText } from 'lucide-react';
 import { formatISODate, parseISODate } from '../../utils/dateUtils';
 
 export const FollowUpModal: React.FC = () => {
@@ -9,6 +9,7 @@ export const FollowUpModal: React.FC = () => {
     followUpSourceTask,
     closeFollowUpModal,
     completeFollowUpAndScheduleNext,
+    completeTask,
   } = useWorkPlan();
 
   const [nextDate, setNextDate] = useState('');
@@ -18,7 +19,7 @@ export const FollowUpModal: React.FC = () => {
 
   useEffect(() => {
     if (followUpSourceTask) {
-      // Suggest date 3 days later or next Monday
+      // Suggest date 3 days later
       const d = parseISODate(followUpSourceTask.date);
       d.setDate(d.getDate() + 3);
       setNextDate(formatISODate(d));
@@ -29,6 +30,20 @@ export const FollowUpModal: React.FC = () => {
   }, [followUpSourceTask, isFollowUpModalOpen]);
 
   if (!isFollowUpModalOpen || !followUpSourceTask) return null;
+
+  const handleApplyPresetDays = (days: number) => {
+    const base = parseISODate(followUpSourceTask.date);
+    base.setDate(base.getDate() + days);
+    setNextDate(formatISODate(base));
+  };
+
+  const handleApplyNextMonday = () => {
+    const base = parseISODate(followUpSourceTask.date);
+    const day = base.getDay();
+    const daysUntilMonday = ((1 - day + 7) % 7) || 7;
+    base.setDate(base.getDate() + daysUntilMonday);
+    setNextDate(formatISODate(base));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,17 +57,22 @@ export const FollowUpModal: React.FC = () => {
     );
   };
 
+  const handleJustComplete = () => {
+    completeTask(followUpSourceTask.id);
+    closeFollowUpModal();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/40 backdrop-blur-xs">
-      <div className="relative w-full max-w-md bg-white rounded-lg shadow-xl border border-neutral-200 overflow-hidden">
+      <div className="relative w-full max-w-lg bg-white rounded-lg shadow-xl border border-neutral-200 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200 bg-neutral-50/50">
           <div>
-            <h3 className="text-sm font-semibold text-neutral-900">
-              Schedule Next Follow-Up
+            <h3 className="text-sm font-semibold text-neutral-900 flex items-center gap-1.5">
+              <span>Follow-Up Workflow</span>
             </h3>
             <p className="text-xs text-neutral-500 mt-0.5">
-              Completing: {followUpSourceTask.title}
+              Completing: <strong className="text-neutral-800">{followUpSourceTask.title}</strong>
             </p>
           </div>
           <button
@@ -63,10 +83,26 @@ export const FollowUpModal: React.FC = () => {
           </button>
         </div>
 
+        {/* Source context summary */}
+        <div className="px-5 py-3 bg-neutral-50 border-b border-neutral-200 text-xs space-y-1">
+          {followUpSourceTask.contactName && (
+            <div className="flex items-center gap-1.5 text-neutral-700">
+              <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+              <span>Contact: <strong>{followUpSourceTask.contactName}</strong></span>
+            </div>
+          )}
+          {followUpSourceTask.notes && (
+            <div className="flex items-start gap-1.5 text-neutral-600 italic">
+              <FileText className="w-3.5 h-3.5 text-neutral-400 shrink-0 mt-0.5" />
+              <span>&quot;{followUpSourceTask.notes}&quot;</span>
+            </div>
+          )}
+        </div>
+
         <form onSubmit={handleSubmit} className="p-5 space-y-3.5">
           <div>
             <label className="block text-xs font-medium text-neutral-700 mb-1">
-              Next Task Title
+              Next Task Title *
             </label>
             <input
               type="text"
@@ -77,33 +113,63 @@ export const FollowUpModal: React.FC = () => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-neutral-700 mb-1">
-                Follow-up Date
-              </label>
-              <div className="relative">
-                <input
-                  type="date"
-                  required
-                  value={nextDate}
-                  onChange={e => setNextDate(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-sm border border-neutral-300 rounded-md font-mono focus:outline-hidden focus:ring-1 focus:ring-neutral-900 bg-white"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-neutral-700 mb-1">
-                Preferred Time
-              </label>
+          <div>
+            <label className="block text-xs font-medium text-neutral-700 mb-1">
+              Follow-up Date *
+            </label>
+            <div className="space-y-2">
               <input
-                type="time"
-                value={nextTime}
-                onChange={e => setNextTime(e.target.value)}
+                type="date"
+                required
+                value={nextDate}
+                onChange={e => setNextDate(e.target.value)}
                 className="w-full px-2.5 py-1.5 text-sm border border-neutral-300 rounded-md font-mono focus:outline-hidden focus:ring-1 focus:ring-neutral-900 bg-white"
               />
+              {/* Presets */}
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-neutral-400 text-[11px]">Quick presets:</span>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetDays(1)}
+                  className="px-2 py-0.5 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-[11px]"
+                >
+                  +1 Day
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetDays(3)}
+                  className="px-2 py-0.5 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-[11px]"
+                >
+                  +3 Days
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPresetDays(7)}
+                  className="px-2 py-0.5 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-[11px]"
+                >
+                  +1 Week
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyNextMonday}
+                  className="px-2 py-0.5 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-[11px]"
+                >
+                  Next Monday
+                </button>
+              </div>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-neutral-700 mb-1">
+              Preferred Time
+            </label>
+            <input
+              type="time"
+              value={nextTime}
+              onChange={e => setNextTime(e.target.value)}
+              className="w-full px-2.5 py-1.5 text-sm border border-neutral-300 rounded-md font-mono focus:outline-hidden focus:ring-1 focus:ring-neutral-900 bg-white"
+            />
           </div>
 
           <div>
@@ -119,21 +185,33 @@ export const FollowUpModal: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-200">
+          <div className="flex items-center justify-between pt-3 border-t border-neutral-200">
             <button
               type="button"
-              onClick={closeFollowUpModal}
-              className="px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 rounded-md transition-colors"
+              onClick={handleJustComplete}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors"
+              title="Mark this task done without creating another follow-up"
             >
-              Cancel
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Complete Only (No Next)</span>
             </button>
-            <button
-              type="submit"
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-md transition-colors shadow-xs"
-            >
-              <span>Complete & Schedule</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={closeFollowUpModal}
+                className="px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-md transition-colors shadow-xs"
+              >
+                <span>Complete & Schedule</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </form>
       </div>

@@ -42,17 +42,31 @@ export const MeetingModal: React.FC = () => {
     );
   };
 
+  const handleApplyPresetDays = (days: number) => {
+    const base = parseISODate(meetingSourceTask.date);
+    base.setDate(base.getDate() + days);
+    setFollowUpDate(formatISODate(base));
+  };
+
+  const handleApplyNextMonday = () => {
+    const base = parseISODate(meetingSourceTask.date);
+    const day = base.getDay();
+    const daysUntilMonday = ((1 - day + 7) % 7) || 7;
+    base.setDate(base.getDate() + daysUntilMonday);
+    setFollowUpDate(formatISODate(base));
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/40 backdrop-blur-xs">
-      <div className="relative w-full max-w-md bg-white rounded-lg shadow-xl border border-neutral-200 overflow-hidden">
+      <div className="relative w-full max-w-lg bg-white rounded-lg shadow-xl border border-neutral-200 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200 bg-neutral-50/50">
           <div>
-            <h3 className="text-sm font-semibold text-neutral-900">
-              Conclude Meeting
+            <h3 className="text-sm font-semibold text-neutral-900 flex items-center gap-1.5">
+              <span>Conclude Meeting</span>
             </h3>
             <p className="text-xs text-neutral-500 mt-0.5">
-              {meetingSourceTask.title}
+              <strong className="text-neutral-800">{meetingSourceTask.title}</strong>
               {meetingSourceTask.meetingWith ? ` · ${meetingSourceTask.meetingWith}` : ''}
             </p>
           </div>
@@ -64,10 +78,28 @@ export const MeetingModal: React.FC = () => {
           </button>
         </div>
 
+        {/* Meeting Details Bar */}
+        {(meetingSourceTask.meetingWith || meetingSourceTask.locationOrLink) && (
+          <div className="px-5 py-2.5 bg-neutral-50 border-b border-neutral-200 text-xs flex flex-wrap items-center gap-x-4 gap-y-1 text-neutral-600">
+            {meetingSourceTask.meetingWith && (
+              <div>
+                <span className="text-neutral-400">With:</span>{' '}
+                <strong className="text-neutral-800">{meetingSourceTask.meetingWith}</strong>
+              </div>
+            )}
+            {meetingSourceTask.locationOrLink && (
+              <div>
+                <span className="text-neutral-400">Location/Link:</span>{' '}
+                <span className="font-mono text-neutral-700">{meetingSourceTask.locationOrLink}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
             <label className="block text-xs font-medium text-neutral-700 mb-1">
-              Meeting Outcome & Decision Notes
+              Meeting Outcome & Decision Notes *
             </label>
             <textarea
               rows={4}
@@ -87,27 +119,27 @@ export const MeetingModal: React.FC = () => {
                 onChange={e => setScheduleFollowUp(e.target.checked)}
                 className="rounded text-neutral-900 focus:ring-neutral-900 w-4 h-4"
               />
-              Schedule follow-up task based on meeting
+              <span>Schedule follow-up task based on this meeting</span>
             </label>
 
             {scheduleFollowUp && (
               <div className="mt-3 p-3 bg-neutral-50 rounded-md border border-neutral-200 space-y-2.5">
                 <div>
                   <label className="block text-xs font-medium text-neutral-700 mb-1">
-                    Follow-up Action Title
+                    Follow-up Action Title *
                   </label>
                   <input
                     type="text"
                     required={scheduleFollowUp}
                     value={followUpTitle}
                     onChange={e => setFollowUpTitle(e.target.value)}
-                    className="w-full px-2.5 py-1 text-sm border border-neutral-300 rounded-md bg-white focus:outline-hidden focus:ring-1 focus:ring-neutral-900"
+                    className="w-full px-2.5 py-1.5 text-sm border border-neutral-300 rounded-md bg-white focus:outline-hidden focus:ring-1 focus:ring-neutral-900"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs font-medium text-neutral-700 mb-1">
-                      Date
+                      Date *
                     </label>
                     <input
                       type="date"
@@ -128,6 +160,38 @@ export const MeetingModal: React.FC = () => {
                       className="w-full px-2 py-1 text-xs border border-neutral-300 rounded-md font-mono bg-white"
                     />
                   </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1 pt-1">
+                  <span className="text-neutral-400 text-[10px]">Date shortcuts:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPresetDays(1)}
+                    className="px-2 py-0.5 rounded bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-700 text-[10px]"
+                  >
+                    +1 Day
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPresetDays(2)}
+                    className="px-2 py-0.5 rounded bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-700 text-[10px]"
+                  >
+                    +2 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPresetDays(7)}
+                    className="px-2 py-0.5 rounded bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-700 text-[10px]"
+                  >
+                    +1 Week
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyNextMonday}
+                    className="px-2 py-0.5 rounded bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-700 text-[10px]"
+                  >
+                    Next Monday
+                  </button>
                 </div>
               </div>
             )}

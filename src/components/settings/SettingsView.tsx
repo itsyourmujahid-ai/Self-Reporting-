@@ -48,6 +48,11 @@ export const SettingsView: React.FC = () => {
   const [tmplFrequency, setTmplFrequency] = useState<FrequencyType>('daily');
   const [tmplDaysOfWeek, setTmplDaysOfWeek] = useState<number[]>([1]);
   const [tmplTimesPerWeek, setTmplTimesPerWeek] = useState(1);
+  const [tmplMonthlyRule, setTmplMonthlyRule] = useState<'last_working_day' | 'first_working_day' | 'specific_day'>('last_working_day');
+  const [tmplDayOfMonth, setTmplDayOfMonth] = useState<number>(30);
+  const [tmplGenerateOnlyWorkingDays, setTmplGenerateOnlyWorkingDays] = useState(true);
+  const [tmplStartDate, setTmplStartDate] = useState('');
+  const [tmplEndDate, setTmplEndDate] = useState('');
   const [tmplTime, setTmplTime] = useState('09:00');
   const [tmplDuration, setTmplDuration] = useState(30);
   const [tmplCategory, setTmplCategory] = useState('Content');
@@ -57,6 +62,8 @@ export const SettingsView: React.FC = () => {
 
   const [savedNotification, setSavedNotification] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [confirmDeleteTmplId, setConfirmDeleteTmplId] = useState<string | null>(null);
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
 
   const handleToggleOffDay = (dayIndex: number) => {
     setWeeklyOffDays(prev =>
@@ -111,6 +118,11 @@ export const SettingsView: React.FC = () => {
     setTmplFrequency('daily');
     setTmplDaysOfWeek([0, 1, 2, 3, 4]);
     setTmplTimesPerWeek(1);
+    setTmplMonthlyRule('last_working_day');
+    setTmplDayOfMonth(30);
+    setTmplGenerateOnlyWorkingDays(true);
+    setTmplStartDate('');
+    setTmplEndDate('');
     setTmplTime('10:00');
     setTmplDuration(30);
     setTmplCategory(settings.categories[0] || 'General');
@@ -126,6 +138,11 @@ export const SettingsView: React.FC = () => {
     setTmplFrequency(tmpl.frequency);
     setTmplDaysOfWeek(tmpl.daysOfWeek);
     setTmplTimesPerWeek(tmpl.timesPerWeek || 1);
+    setTmplMonthlyRule(tmpl.monthlyRule || 'last_working_day');
+    setTmplDayOfMonth(tmpl.dayOfMonth || 30);
+    setTmplGenerateOnlyWorkingDays(tmpl.generateOnlyOnWorkingDays !== false);
+    setTmplStartDate(tmpl.startDate || '');
+    setTmplEndDate(tmpl.endDate || '');
     setTmplTime(tmpl.preferredTime);
     setTmplDuration(tmpl.estimatedDuration);
     setTmplCategory(tmpl.category);
@@ -145,6 +162,11 @@ export const SettingsView: React.FC = () => {
       frequency: tmplFrequency,
       daysOfWeek: tmplDaysOfWeek,
       timesPerWeek: tmplTimesPerWeek,
+      monthlyRule: tmplFrequency === 'monthly' ? tmplMonthlyRule : undefined,
+      dayOfMonth: tmplFrequency === 'monthly' && tmplMonthlyRule === 'specific_day' ? tmplDayOfMonth : undefined,
+      generateOnlyOnWorkingDays: tmplFrequency === 'daily' ? tmplGenerateOnlyWorkingDays : undefined,
+      startDate: tmplStartDate || undefined,
+      endDate: tmplEndDate || undefined,
       preferredTime: tmplTime,
       estimatedDuration: tmplDuration,
       category: tmplCategory,
@@ -192,13 +214,8 @@ export const SettingsView: React.FC = () => {
   };
 
   const handleResetData = () => {
-    if (
-      window.confirm(
-        'Are you sure you want to reset all data back to initial defaults? This will erase current edits.'
-      )
-    ) {
-      resetAll();
-    }
+    resetAll();
+    setConfirmResetOpen(false);
   };
 
   return (
@@ -361,7 +378,15 @@ export const SettingsView: React.FC = () => {
           {templates.map(tmpl => {
             const daysLabel =
               tmpl.frequency === 'daily'
-                ? 'All working days'
+                ? (tmpl.generateOnlyOnWorkingDays === false ? 'Every day (incl. weekends)' : 'All working days')
+                : tmpl.frequency === 'monthly'
+                ? (tmpl.monthlyRule === 'last_working_day' || tmpl.recurrenceTag === 'monthly_report'
+                    ? 'Last working day of month'
+                    : tmpl.monthlyRule === 'first_working_day'
+                    ? 'First working day of month'
+                    : `Day ${tmpl.dayOfMonth || 1} of month`)
+                : tmpl.frequency === 'multiple_times_per_week'
+                ? `${tmpl.timesPerWeek || tmpl.daysOfWeek.length}x/wk (${tmpl.daysOfWeek.map(d => DAY_NAMES[d].slice(0, 3)).join(', ')})`
                 : tmpl.daysOfWeek.map(d => DAY_NAMES[d].slice(0, 3)).join(', ');
 
             return (
@@ -389,15 +414,24 @@ export const SettingsView: React.FC = () => {
                           Paused
                         </span>
                       )}
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded border bg-neutral-50 text-neutral-600 capitalize">
+                        {tmpl.frequency.replace(/_/g, ' ')}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-neutral-500 mt-0.5">
-                      <span className="capitalize">{tmpl.frequency}</span>
-                      <span>·</span>
+                    <div className="flex items-center gap-2 text-[11px] text-neutral-500 mt-0.5 flex-wrap">
                       <span>{daysLabel}</span>
                       <span>·</span>
                       <span className="font-mono tabular-nums">{tmpl.preferredTime} ({tmpl.estimatedDuration}m)</span>
                       <span>·</span>
                       <span>{tmpl.category}</span>
+                      {(tmpl.startDate || tmpl.endDate) && (
+                        <>
+                          <span>·</span>
+                          <span className="text-neutral-400 font-mono text-[10px]">
+                            {tmpl.startDate || 'start'} → {tmpl.endDate || 'ongoing'}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -411,18 +445,37 @@ export const SettingsView: React.FC = () => {
                   >
                     <FileEdit className="w-3.5 h-3.5" />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm(`Delete template "${tmpl.title}"?`)) {
-                        deleteTemplate(tmpl.id);
-                      }
-                    }}
-                    className="p-1.5 text-neutral-400 hover:text-rose-600 rounded"
-                    title="Delete Template"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {confirmDeleteTmplId === tmpl.id ? (
+                    <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded text-[11px]">
+                      <span className="text-rose-700 font-medium">Delete?</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          deleteTemplate(tmpl.id);
+                          setConfirmDeleteTmplId(null);
+                        }}
+                        className="text-rose-800 font-bold hover:underline px-1"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteTmplId(null)}
+                        className="text-neutral-500 hover:text-neutral-800 px-0.5"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteTmplId(tmpl.id)}
+                      className="p-1.5 text-neutral-400 hover:text-rose-600 rounded"
+                      title="Delete Template"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -553,14 +606,34 @@ export const SettingsView: React.FC = () => {
             />
           </label>
 
-          <button
-            type="button"
-            onClick={handleResetData}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 rounded-md transition-colors ml-auto"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset to Sample Data</span>
-          </button>
+          {confirmResetOpen ? (
+            <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-md ml-auto text-xs">
+              <span className="text-rose-800 font-medium">Reset all workspace data to defaults?</span>
+              <button
+                type="button"
+                onClick={handleResetData}
+                className="px-2 py-0.5 text-xs font-semibold text-white bg-rose-700 hover:bg-rose-800 rounded shadow-2xs"
+              >
+                Yes, Reset
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmResetOpen(false)}
+                className="px-2 py-0.5 text-xs text-neutral-600 hover:text-neutral-900"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmResetOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 rounded-md transition-colors ml-auto"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset to Sample Data</span>
+            </button>
+          )}
         </div>
 
         {importStatus && (
@@ -611,6 +684,9 @@ export const SettingsView: React.FC = () => {
                   >
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
+                    <option value="multiple_times_per_week">Multiple Times Per Week</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="custom">Custom Routine</option>
                   </select>
                 </div>
 
@@ -632,11 +708,43 @@ export const SettingsView: React.FC = () => {
                 </div>
               </div>
 
-              {tmplFrequency === 'weekly' && (
-                <div>
-                  <label className="block text-xs font-medium text-neutral-700 mb-1.5">
-                    Days of Week
+              {/* Daily configuration */}
+              {tmplFrequency === 'daily' && (
+                <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-md">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-800">
+                    <input
+                      type="checkbox"
+                      checked={tmplGenerateOnlyWorkingDays}
+                      onChange={e => setTmplGenerateOnlyWorkingDays(e.target.checked)}
+                      className="rounded text-neutral-900 focus:ring-neutral-900"
+                    />
+                    <span>Generate only on working days (respect configured weekly off days)</span>
                   </label>
+                </div>
+              )}
+
+              {/* Weekly / Multiple times / Custom: Days of Week */}
+              {(tmplFrequency === 'weekly' || tmplFrequency === 'multiple_times_per_week' || tmplFrequency === 'custom') && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-medium text-neutral-700">
+                      Days of Week
+                    </label>
+                    {tmplFrequency === 'multiple_times_per_week' && (
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span className="text-neutral-500">Target frequency:</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="7"
+                          value={tmplTimesPerWeek}
+                          onChange={e => setTmplTimesPerWeek(parseInt(e.target.value, 10) || 1)}
+                          className="w-12 px-1.5 py-0.5 text-xs border border-neutral-300 rounded font-mono text-center bg-white"
+                        />
+                        <span className="text-neutral-500">x / week</span>
+                      </div>
+                    )}
+                  </div>
                   <div className="grid grid-cols-7 gap-1">
                     {DAY_NAMES.map((name, idx) => {
                       const isSelected = tmplDaysOfWeek.includes(idx);
@@ -662,6 +770,89 @@ export const SettingsView: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Monthly Rule configuration */}
+              {tmplFrequency === 'monthly' && (
+                <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-md space-y-2.5">
+                  <label className="block text-xs font-semibold text-neutral-800">
+                    Monthly Generation Rule
+                  </label>
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-700">
+                      <input
+                        type="radio"
+                        name="monthlyRule"
+                        value="last_working_day"
+                        checked={tmplMonthlyRule === 'last_working_day'}
+                        onChange={() => setTmplMonthlyRule('last_working_day')}
+                        className="text-neutral-900 focus:ring-neutral-900"
+                      />
+                      <span>Last working day of the month (e.g. Monthly Self-Report)</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-700">
+                      <input
+                        type="radio"
+                        name="monthlyRule"
+                        value="first_working_day"
+                        checked={tmplMonthlyRule === 'first_working_day'}
+                        onChange={() => setTmplMonthlyRule('first_working_day')}
+                        className="text-neutral-900 focus:ring-neutral-900"
+                      />
+                      <span>First working day of the month</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-700">
+                      <input
+                        type="radio"
+                        name="monthlyRule"
+                        value="specific_day"
+                        checked={tmplMonthlyRule === 'specific_day'}
+                        onChange={() => setTmplMonthlyRule('specific_day')}
+                        className="text-neutral-900 focus:ring-neutral-900"
+                      />
+                      <span className="flex items-center gap-2">
+                        <span>Specific day of the month:</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          disabled={tmplMonthlyRule !== 'specific_day'}
+                          value={tmplDayOfMonth}
+                          onChange={e => setTmplDayOfMonth(parseInt(e.target.value, 10) || 1)}
+                          className="w-14 px-2 py-0.5 text-xs border border-neutral-300 rounded font-mono bg-white"
+                        />
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* Start Date and End Date Bounds (Optional) */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-700 mb-1">
+                    Start Date <span className="text-neutral-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={tmplStartDate}
+                    onChange={e => setTmplStartDate(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs border border-neutral-300 rounded font-mono bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-700 mb-1">
+                    End Date <span className="text-neutral-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={tmplEndDate}
+                    onChange={e => setTmplEndDate(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs border border-neutral-300 rounded font-mono bg-white"
+                  />
+                </div>
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

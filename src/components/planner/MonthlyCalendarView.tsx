@@ -41,6 +41,8 @@ export const MonthlyCalendarView: React.FC = () => {
     setPlannerSubTab,
     openCreateTask,
     openEditTask,
+    openFollowUpModal,
+    openMeetingModal,
     toggleTaskStatus,
     updateTask,
     rescheduleTask,
@@ -55,6 +57,7 @@ export const MonthlyCalendarView: React.FC = () => {
   // Inline reschedule state in detail drawer
   const [reschedulingTaskId, setReschedulingTaskId] = useState<string | null>(null);
   const [rescheduleDateInput, setRescheduleDateInput] = useState<string>('');
+  const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null);
 
   const [yearStr, monthStr] = currentMonth.split('-');
   const year = parseInt(yearStr, 10);
@@ -539,6 +542,34 @@ export const MonthlyCalendarView: React.FC = () => {
 
                         {/* Actions */}
                         <div className="flex items-center gap-1 shrink-0">
+                          {t.type === 'meeting' && !isDone && (
+                            <button
+                              onClick={() => {
+                                setInspectDate(null);
+                                openMeetingModal(t);
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded shadow-xs"
+                              title="Conclude Meeting"
+                            >
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Conclude</span>
+                            </button>
+                          )}
+
+                          {t.type === 'follow_up' && !isDone && (
+                            <button
+                              onClick={() => {
+                                setInspectDate(null);
+                                openFollowUpModal(t);
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-white bg-amber-700 hover:bg-amber-800 rounded shadow-xs"
+                              title="Complete & Schedule Next Follow-up"
+                            >
+                              <ArrowRight className="w-3 h-3" />
+                              <span>Follow-up</span>
+                            </button>
+                          )}
+
                           {/* Reschedule button */}
                           <button
                             onClick={() => {
@@ -563,23 +594,40 @@ export const MonthlyCalendarView: React.FC = () => {
                             <FileEdit className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Delete button */}
-                          <button
-                            onClick={() => {
-                              if (window.confirm(`Delete "${t.title}"?`)) {
-                                deleteTask(t.id);
-                              }
-                            }}
-                            className="p-1 text-neutral-400 hover:text-rose-600 rounded"
-                            title="Delete task"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {/* Delete button with inline confirmation */}
+                          {confirmDeleteTaskId === t.id ? (
+                            <span className="inline-flex items-center gap-1 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded text-[10px]">
+                              <span className="text-rose-700 font-semibold">Delete?</span>
+                              <button
+                                onClick={() => {
+                                  deleteTask(t.id);
+                                  setConfirmDeleteTaskId(null);
+                                }}
+                                className="text-rose-800 font-bold hover:underline px-0.5"
+                              >
+                                Yes
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteTaskId(null)}
+                                className="text-neutral-500 hover:text-neutral-800 px-0.5"
+                              >
+                                No
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmDeleteTaskId(t.id)}
+                              className="p-1 text-neutral-400 hover:text-rose-600 rounded"
+                              title="Delete task"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
 
                       {/* Metadata unboxed text */}
-                      <div className="flex items-center gap-2 text-[11px] text-neutral-400 pl-6.5">
+                      <div className="flex items-center gap-2 text-[11px] text-neutral-400 pl-6.5 flex-wrap">
                         <span className="capitalize">{t.type.replace('_', ' ')}</span>
                         <span>·</span>
                         <span>{t.durationMinutes}m</span>
@@ -587,6 +635,18 @@ export const MonthlyCalendarView: React.FC = () => {
                         <span>{t.category}</span>
                         <span>·</span>
                         <span className="capitalize">{t.priority}</span>
+                        {t.contactName && (
+                          <>
+                            <span>·</span>
+                            <span className="text-amber-800 font-medium">Contact: {t.contactName}</span>
+                          </>
+                        )}
+                        {t.meetingWith && (
+                          <>
+                            <span>·</span>
+                            <span className="text-blue-800 font-medium">Meeting: {t.meetingWith}</span>
+                          </>
+                        )}
                       </div>
 
                       {/* Notes if any */}

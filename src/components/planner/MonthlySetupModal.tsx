@@ -260,9 +260,28 @@ export const MonthlySetupModal: React.FC = () => {
                     type="month"
                     value={targetMonth}
                     onChange={e => {
-                      setTargetMonth(e.target.value);
-                      setNewImpDate(`${e.target.value}-01`);
-                      setNewOtDate(`${e.target.value}-01`);
+                      const newMonth = e.target.value;
+                      if (!newMonth) return;
+                      const oldMonth = targetMonth;
+                      setTargetMonth(newMonth);
+                      setNewImpDate(`${newMonth}-01`);
+                      setNewOtDate(`${newMonth}-01`);
+                      setImportantDates(prev =>
+                        prev.map(item => ({
+                          ...item,
+                          date: item.date.startsWith(oldMonth)
+                            ? item.date.replace(oldMonth, newMonth)
+                            : `${newMonth}-05`,
+                        }))
+                      );
+                      setOneTimeTasks(prev =>
+                        prev.map(item => ({
+                          ...item,
+                          date: item.date.startsWith(oldMonth)
+                            ? item.date.replace(oldMonth, newMonth)
+                            : `${newMonth}-01`,
+                        }))
+                      );
                     }}
                     className="w-48 px-3 py-1.5 text-sm border border-neutral-300 rounded-md font-mono focus:ring-1 focus:ring-neutral-900 bg-white"
                   />
@@ -383,13 +402,17 @@ export const MonthlySetupModal: React.FC = () => {
                   const isChecked = selectedTemplateIds.includes(tmpl.id);
                   const frequencyDesc =
                     tmpl.frequency === 'daily'
-                      ? 'Daily on working days'
+                      ? (tmpl.generateOnlyOnWorkingDays === false ? 'Daily (all days incl. weekends)' : 'Daily on working days')
                       : tmpl.frequency === 'weekly'
                       ? `Every ${tmpl.daysOfWeek.map(d => DAY_NAMES[d].slice(0, 3)).join(', ')}`
                       : tmpl.frequency === 'multiple_times_per_week'
                       ? `${tmpl.timesPerWeek || tmpl.daysOfWeek.length}x/week on ${tmpl.daysOfWeek.map(d => DAY_NAMES[d].slice(0, 3)).join(', ')}`
                       : tmpl.frequency === 'monthly'
-                      ? `Day ${tmpl.dayOfMonth || 1} of month`
+                      ? (tmpl.monthlyRule === 'last_working_day' || tmpl.recurrenceTag === 'monthly_report'
+                          ? 'Last working day of month'
+                          : tmpl.monthlyRule === 'first_working_day'
+                          ? 'First working day of month'
+                          : `Day ${tmpl.dayOfMonth || 1} of month`)
                       : 'Custom';
 
                   return (
