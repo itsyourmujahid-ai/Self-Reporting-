@@ -1,0 +1,6 @@
+{
+  "name": "Self Reporting",
+  "description": "Personal work planning, scheduling, task tracking, and self-reporting application.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
