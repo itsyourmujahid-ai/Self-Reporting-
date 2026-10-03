@@ -1,5 +1,5 @@
 import { TaskTemplate, UserSettings, Task, WeeklyReportRecord, MonthlyReportRecord } from '../types';
-import { addMinutesToTime, formatISODate, getWeekIdentifier, getWeekRange } from './dateUtils';
+import { addMinutesToTime, formatISODate, getWeekIdentifier, getWeekRange, isDateOff, parseISODate } from './dateUtils';
 
 export const DEFAULT_SETTINGS: UserSettings = {
   userName: 'Personal Workspace',
@@ -21,7 +21,8 @@ export const DEFAULT_TEMPLATES: TaskTemplate[] = [
     title: 'Create Status Poster',
     type: 'recurring',
     frequency: 'daily',
-    daysOfWeek: [0, 1, 2, 3, 4], // Working days (Sun-Thu)
+    daysOfWeek: [0, 1, 2, 3, 4, 5, 6], // Every day
+    generateOnlyOnWorkingDays: false,
     preferredTime: '09:00',
     estimatedDuration: 30,
     category: 'Content',
@@ -35,7 +36,8 @@ export const DEFAULT_TEMPLATES: TaskTemplate[] = [
     title: 'Delivery Report',
     type: 'recurring',
     frequency: 'daily',
-    daysOfWeek: [0, 1, 2, 3, 4],
+    daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+    generateOnlyOnWorkingDays: false,
     preferredTime: '10:00',
     estimatedDuration: 45,
     category: 'Operations',
@@ -49,7 +51,8 @@ export const DEFAULT_TEMPLATES: TaskTemplate[] = [
     title: 'Seller Updates',
     type: 'recurring',
     frequency: 'daily',
-    daysOfWeek: [0, 1, 2, 3, 4],
+    daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+    generateOnlyOnWorkingDays: false,
     preferredTime: '11:00',
     estimatedDuration: 60,
     category: 'Operations',
@@ -63,7 +66,8 @@ export const DEFAULT_TEMPLATES: TaskTemplate[] = [
     title: 'Cold Calls Outreach',
     type: 'recurring',
     frequency: 'daily',
-    daysOfWeek: [0, 1, 2, 3, 4],
+    daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+    generateOnlyOnWorkingDays: false,
     preferredTime: '15:00',
     estimatedDuration: 60,
     category: 'Sales',
@@ -168,221 +172,383 @@ export const DEFAULT_TEMPLATES: TaskTemplate[] = [
 ];
 
 /**
- * Generate initial seeded tasks for September 2026
- * Given today is 2026-09-29 (Tuesday)
+ * Dynamically generate recurring tasks for any single day based on active templates and settings
+ */
+export function generateDayRecurringTasks(
+  dateISO: string,
+  templates: TaskTemplate[] = DEFAULT_TEMPLATES,
+  settings: UserSettings = DEFAULT_SETTINGS
+): Task[] {
+  // STRICT CENTRAL RULE: OFF DAY = ZERO TASKS!
+  // If date is configured as an off day (weekly off day or custom off date), return 0 tasks immediately!
+  if (isDateOff(dateISO, settings.weeklyOffDays, settings.customOffDates)) {
+    return [];
+  }
+
+  const [year, month, day] = dateISO.split('-').map(Number);
+  const dateObj = new Date(year, month - 1, day);
+  const dayOfWeek = dateObj.getDay();
+
+  const isWorkingDay = settings.workingDays ? settings.workingDays.includes(dayOfWeek) : true;
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  const generated: Task[] = [];
+
+  templates.filter(t => t.active !== false).forEach(tmpl => {
+    let shouldGenerate = false;
+
+    if (tmpl.frequency === 'daily') {
+      // Daily tasks run on working days, strictly skipping off days
+      shouldGenerate = true;
+    } else if (tmpl.frequency === 'weekly' || tmpl.frequency === 'multiple_times_per_week' || tmpl.frequency === 'custom') {
+      if (tmpl.daysOfWeek.includes(dayOfWeek)) {
+        shouldGenerate = true;
+      }
+    } else if (tmpl.frequency === 'monthly') {
+      if (tmpl.monthlyRule === 'last_working_day') {
+        if (day === daysInMonth) shouldGenerate = true;
+      } else if (tmpl.dayOfMonth === day) {
+        shouldGenerate = true;
+      }
+    }
+
+    if (shouldGenerate) {
+      const endTime = addMinutesToTime(tmpl.preferredTime, tmpl.estimatedDuration);
+      generated.push({
+        id: `gen-${tmpl.id}-${dateISO}`,
+        title: tmpl.title,
+        type: 'recurring',
+        date: dateISO,
+        startTime: tmpl.preferredTime,
+        endTime,
+        durationMinutes: tmpl.estimatedDuration,
+        status: 'planned',
+        priority: tmpl.priority,
+        notes: tmpl.notes || '',
+        category: tmpl.category,
+        project: 'Core Routine',
+        templateId: tmpl.id,
+        recurrenceTag: tmpl.recurrenceTag,
+        createdAt: `${dateISO}T08:00:00Z`,
+      });
+    }
+  });
+
+  return generated;
+}
+
+/**
+ * Generate initial seeded tasks for September 2026, October 2026, and current runtime date.
+ * Enforces STRICT ZERO TASKS ON OFF DAYS.
  */
 export function generateInitialTasks(): Task[] {
   const tasks: Task[] = [];
-  const year = 2026;
-  const month = 8; // September (0-indexed)
-  const totalDays = 30;
   const weeklyOffDays = [5, 6]; // Friday & Saturday
 
-  // Recurring templates
-  for (let day = 1; day <= totalDays; day++) {
-    const dateObj = new Date(year, month, day);
+  // 1. September 2026 (days 1 to 30) - SKIP OFF DAYS COMPLETELY
+  for (let day = 1; day <= 30; day++) {
+    const dateObj = new Date(2026, 8, day);
     const dateISO = formatISODate(dateObj);
     const dayOfWeek = dateObj.getDay();
     const isOffDay = weeklyOffDays.includes(dayOfWeek);
 
-    // Skip recurring on off days unless intentionally scheduled
-    if (!isOffDay) {
-      // Daily routines
-      // 09:00 Create Status Poster
-      const isPast = day < 29;
-      const isToday = day === 29;
+    if (isOffDay) {
+      continue; // ZERO TASKS on off day
+    }
 
+    const isPast = day < 29;
+    const isToday = day === 29;
+
+    tasks.push({
+      id: `task-poster-${dateISO}`,
+      title: 'Create Status Poster',
+      type: 'recurring',
+      date: dateISO,
+      startTime: '09:00',
+      endTime: '09:30',
+      durationMinutes: 30,
+      status: isPast ? 'completed' : isToday ? 'completed' : 'planned',
+      priority: 'high',
+      notes: 'Daily status poster design & publishing across announcement channels.',
+      category: 'Content',
+      project: 'Core Routine',
+      createdAt: '2026-09-01T08:00:00Z',
+      completedAt: isPast || isToday ? `${dateISO}T09:28:00Z` : undefined,
+      recurrenceTag: 'daily_poster',
+      templateId: 'tmpl-daily-poster',
+    });
+
+    tasks.push({
+      id: `task-delivery-${dateISO}`,
+      title: 'Delivery Report',
+      type: 'recurring',
+      date: dateISO,
+      startTime: '10:00',
+      endTime: '10:45',
+      durationMinutes: 45,
+      status: isPast ? 'completed' : isToday ? 'completed' : 'planned',
+      priority: 'high',
+      notes: 'Warehouse dispatch log audit and transit tracking reconciliation.',
+      category: 'Operations',
+      project: 'Core Routine',
+      createdAt: '2026-09-01T08:00:00Z',
+      completedAt: isPast || isToday ? `${dateISO}T10:42:00Z` : undefined,
+      recurrenceTag: 'delivery_report',
+      templateId: 'tmpl-delivery-report',
+    });
+
+    tasks.push({
+      id: `task-seller-${dateISO}`,
+      title: 'Seller Updates',
+      type: 'recurring',
+      date: dateISO,
+      startTime: '11:00',
+      endTime: '12:00',
+      durationMinutes: 60,
+      status: isPast ? (day % 7 === 0 ? 'skipped' : 'completed') : isToday ? 'in_progress' : 'planned',
+      priority: 'medium',
+      notes: 'Batch message merchants on order volume quotas and restock forecasts.',
+      category: 'Operations',
+      project: 'Core Routine',
+      createdAt: '2026-09-01T08:00:00Z',
+      completedAt: isPast && day % 7 !== 0 ? `${dateISO}T11:55:00Z` : undefined,
+      recurrenceTag: 'seller_updates',
+      templateId: 'tmpl-seller-updates',
+    });
+
+    tasks.push({
+      id: `task-coldcalls-${dateISO}`,
+      title: 'Cold Calls Outreach',
+      type: 'recurring',
+      date: dateISO,
+      startTime: '15:00',
+      endTime: '16:00',
+      durationMinutes: 60,
+      status: isPast ? 'completed' : 'planned',
+      priority: 'high',
+      notes: 'Targeted outbound calls to potential commercial partners.',
+      category: 'Sales',
+      project: 'Lead Generation',
+      createdAt: '2026-09-01T08:00:00Z',
+      completedAt: isPast ? `${dateISO}T16:05:00Z` : undefined,
+      recurrenceTag: 'cold_calls',
+      templateId: 'tmpl-cold-calls',
+    });
+
+    if (dayOfWeek === 1) {
       tasks.push({
-        id: `task-poster-${dateISO}`,
-        title: 'Create Status Poster',
+        id: `task-ig-${dateISO}`,
+        title: 'Instagram Carousel',
         type: 'recurring',
         date: dateISO,
-        startTime: '09:00',
-        endTime: '09:30',
-        durationMinutes: 30,
-        status: isPast ? 'completed' : isToday ? 'completed' : 'planned',
-        priority: 'high',
-        notes: 'Daily status poster design & publishing across announcement channels.',
-        category: 'Content',
-        project: 'Core Routine',
-        createdAt: '2026-09-01T08:00:00Z',
-        completedAt: isPast || isToday ? `${dateISO}T09:28:00Z` : undefined,
-        recurrenceTag: 'daily_poster',
-        templateId: 'tmpl-daily-poster',
-      });
-
-      // 10:00 Delivery Report
-      tasks.push({
-        id: `task-delivery-${dateISO}`,
-        title: 'Delivery Report',
-        type: 'recurring',
-        date: dateISO,
-        startTime: '10:00',
-        endTime: '10:45',
+        startTime: '13:00',
+        endTime: '13:45',
         durationMinutes: 45,
-        status: isPast ? 'completed' : isToday ? 'completed' : 'planned',
-        priority: 'high',
-        notes: 'Warehouse dispatch log audit and transit tracking reconciliation.',
-        category: 'Operations',
-        project: 'Core Routine',
-        createdAt: '2026-09-01T08:00:00Z',
-        completedAt: isPast || isToday ? `${dateISO}T10:42:00Z` : undefined,
-        recurrenceTag: 'delivery_report',
-        templateId: 'tmpl-delivery-report',
-      });
-
-      // 11:00 Seller Updates
-      tasks.push({
-        id: `task-seller-${dateISO}`,
-        title: 'Seller Updates',
-        type: 'recurring',
-        date: dateISO,
-        startTime: '11:00',
-        endTime: '12:00',
-        durationMinutes: 60,
-        status: isPast ? (day % 7 === 0 ? 'skipped' : 'completed') : isToday ? 'in_progress' : 'planned',
+        status: isPast ? 'completed' : 'planned',
         priority: 'medium',
-        notes: 'Batch message merchants on order volume quotas and restock forecasts.',
-        category: 'Operations',
-        project: 'Core Routine',
+        notes: 'Publish carousel on business automation tactics with step-by-step visuals.',
+        category: 'Content',
+        project: 'Personal Brand',
         createdAt: '2026-09-01T08:00:00Z',
-        completedAt: isPast && day % 7 !== 0 ? `${dateISO}T11:55:00Z` : undefined,
-        recurrenceTag: 'seller_updates',
-        templateId: 'tmpl-seller-updates',
+        completedAt: isPast ? `${dateISO}T13:40:00Z` : undefined,
+        recurrenceTag: 'ig_carousel',
+        templateId: 'tmpl-ig-carousel',
       });
+    }
 
-      // 15:00 Cold Calls
+    if (dayOfWeek === 4) {
       tasks.push({
-        id: `task-coldcalls-${dateISO}`,
-        title: 'Cold Calls Outreach',
+        id: `task-reel-${dateISO}`,
+        title: 'Weekly Reel Video',
         type: 'recurring',
         date: dateISO,
-        startTime: '15:00',
-        endTime: '16:00',
+        startTime: '14:00',
+        endTime: '14:45',
+        durationMinutes: 45,
+        status: isPast ? 'completed' : 'planned',
+        priority: 'medium',
+        notes: 'Short-form workflow breakdown with audio hook.',
+        category: 'Content',
+        project: 'Personal Brand',
+        createdAt: '2026-09-01T08:00:00Z',
+        completedAt: isPast ? `${dateISO}T14:50:00Z` : undefined,
+        recurrenceTag: 'weekly_reel',
+        templateId: 'tmpl-reel',
+      });
+    }
+
+    if ([0, 1, 3].includes(dayOfWeek)) {
+      tasks.push({
+        id: `task-li-${dateISO}`,
+        title: 'LinkedIn Post',
+        type: 'recurring',
+        date: dateISO,
+        startTime: '10:30',
+        endTime: '11:00',
+        durationMinutes: 30,
+        status: isPast ? 'completed' : 'planned',
+        priority: 'medium',
+        notes: 'Publish insight on optimizing vendor supply chains and self-reporting routines.',
+        category: 'Content',
+        project: 'Personal Brand',
+        createdAt: '2026-09-01T08:00:00Z',
+        completedAt: isPast ? `${dateISO}T10:55:00Z` : undefined,
+        recurrenceTag: 'linkedin_post',
+        templateId: 'tmpl-linkedin',
+      });
+    }
+
+    if ([0, 2, 4].includes(dayOfWeek)) {
+      tasks.push({
+        id: `task-x-${dateISO}`,
+        title: 'X Thread / Update',
+        type: 'recurring',
+        date: dateISO,
+        startTime: '16:30',
+        endTime: '16:50',
+        durationMinutes: 20,
+        status: isPast ? 'completed' : 'planned',
+        priority: 'low',
+        notes: 'Punchy thread highlighting operational efficiency rules.',
+        category: 'Content',
+        project: 'Personal Brand',
+        createdAt: '2026-09-01T08:00:00Z',
+        completedAt: isPast ? `${dateISO}T16:48:00Z` : undefined,
+        recurrenceTag: 'x_post',
+        templateId: 'tmpl-x-post',
+      });
+    }
+
+    if (dayOfWeek === 3) {
+      tasks.push({
+        id: `task-blog-${dateISO}`,
+        title: 'Website Blog Article',
+        type: 'recurring',
+        date: dateISO,
+        startTime: '16:00',
+        endTime: '17:00',
         durationMinutes: 60,
         status: isPast ? 'completed' : 'planned',
-        priority: 'high',
-        notes: 'Targeted outbound calls to potential commercial partners.',
-        category: 'Sales',
-        project: 'Lead Generation',
+        priority: 'medium',
+        notes: 'In-depth essay on building a resilient personal operating system.',
+        category: 'Content',
+        project: 'Personal Brand',
         createdAt: '2026-09-01T08:00:00Z',
-        completedAt: isPast ? `${dateISO}T16:05:00Z` : undefined,
-        recurrenceTag: 'cold_calls',
-        templateId: 'tmpl-cold-calls',
+        completedAt: isPast ? `${dateISO}T17:15:00Z` : undefined,
+        recurrenceTag: 'blog_post',
+        templateId: 'tmpl-blog-post',
       });
-
-      // Weekly tasks according to daysOfWeek
-      // Instagram Carousel on Monday (1)
-      if (dayOfWeek === 1) {
-        tasks.push({
-          id: `task-ig-${dateISO}`,
-          title: 'Instagram Carousel',
-          type: 'recurring',
-          date: dateISO,
-          startTime: '13:00',
-          endTime: '13:45',
-          durationMinutes: 45,
-          status: isPast ? 'completed' : 'planned',
-          priority: 'medium',
-          notes: 'Publish carousel on business automation tactics with step-by-step visuals.',
-          category: 'Content',
-          project: 'Personal Brand',
-          createdAt: '2026-09-01T08:00:00Z',
-          completedAt: isPast ? `${dateISO}T13:40:00Z` : undefined,
-          recurrenceTag: 'ig_carousel',
-          templateId: 'tmpl-ig-carousel',
-        });
-      }
-
-      // Reel on Thursday (4)
-      if (dayOfWeek === 4) {
-        tasks.push({
-          id: `task-reel-${dateISO}`,
-          title: 'Weekly Reel Video',
-          type: 'recurring',
-          date: dateISO,
-          startTime: '14:00',
-          endTime: '14:45',
-          durationMinutes: 45,
-          status: isPast ? 'completed' : 'planned',
-          priority: 'medium',
-          notes: 'Short-form workflow breakdown with audio hook.',
-          category: 'Content',
-          project: 'Personal Brand',
-          createdAt: '2026-09-01T08:00:00Z',
-          completedAt: isPast ? `${dateISO}T14:50:00Z` : undefined,
-          recurrenceTag: 'weekly_reel',
-          templateId: 'tmpl-reel',
-        });
-      }
-
-      // LinkedIn Posts (Sun 0, Mon 1, Wed 3)
-      if ([0, 1, 3].includes(dayOfWeek)) {
-        tasks.push({
-          id: `task-li-${dateISO}`,
-          title: 'LinkedIn Post',
-          type: 'recurring',
-          date: dateISO,
-          startTime: '10:30',
-          endTime: '11:00',
-          durationMinutes: 30,
-          status: isPast ? 'completed' : isToday ? 'planned' : 'planned',
-          priority: 'medium',
-          notes: 'Publish insight on optimizing vendor supply chains and self-reporting routines.',
-          category: 'Content',
-          project: 'Personal Brand',
-          createdAt: '2026-09-01T08:00:00Z',
-          completedAt: isPast ? `${dateISO}T10:55:00Z` : undefined,
-          recurrenceTag: 'linkedin_post',
-          templateId: 'tmpl-linkedin',
-        });
-      }
-
-      // X Posts (Sun 0, Tue 2, Thu 4)
-      if ([0, 2, 4].includes(dayOfWeek)) {
-        tasks.push({
-          id: `task-x-${dateISO}`,
-          title: 'X Thread / Update',
-          type: 'recurring',
-          date: dateISO,
-          startTime: '16:30',
-          endTime: '16:50',
-          durationMinutes: 20,
-          status: isPast ? 'completed' : isToday ? 'planned' : 'planned',
-          priority: 'low',
-          notes: 'Punchy thread highlighting operational efficiency rules.',
-          category: 'Content',
-          project: 'Personal Brand',
-          createdAt: '2026-09-01T08:00:00Z',
-          completedAt: isPast ? `${dateISO}T16:48:00Z` : undefined,
-          recurrenceTag: 'x_post',
-          templateId: 'tmpl-x-post',
-        });
-      }
-
-      // Website Blog on Wednesday (3)
-      if (dayOfWeek === 3) {
-        tasks.push({
-          id: `task-blog-${dateISO}`,
-          title: 'Website Blog Article',
-          type: 'recurring',
-          date: dateISO,
-          startTime: '16:00',
-          endTime: '17:00',
-          durationMinutes: 60,
-          status: isPast ? 'completed' : 'planned',
-          priority: 'medium',
-          notes: 'In-depth essay on building a resilient personal operating system.',
-          category: 'Content',
-          project: 'Personal Brand',
-          createdAt: '2026-09-01T08:00:00Z',
-          completedAt: isPast ? `${dateISO}T17:15:00Z` : undefined,
-          recurrenceTag: 'blog_post',
-          templateId: 'tmpl-blog-post',
-        });
-      }
     }
   }
+
+  // 2. October 2026 (days 1 to 31) - ONLY on WORKING DAYS
+  const now = new Date();
+  const todayISO = formatISODate(now);
+
+  for (let day = 1; day <= 31; day++) {
+    const dateObj = new Date(2026, 9, day);
+    const dateISO = formatISODate(dateObj);
+    const dayOfWeek = dateObj.getDay();
+    const isOffDay = weeklyOffDays.includes(dayOfWeek);
+
+    if (isOffDay) {
+      continue; // STRICT: ZERO tasks on off days (Friday Oct 2, Saturday Oct 3, etc.)
+    }
+
+    // Generate recurring tasks for working day
+    const dayTasks = generateDayRecurringTasks(dateISO);
+    dayTasks.forEach(dt => {
+      if (dateISO < todayISO) {
+        dt.status = 'completed';
+        dt.completedAt = `${dateISO}T17:00:00Z`;
+      }
+      tasks.push(dt);
+    });
+  }
+
+  // 3. Add sample working-day meetings and follow-ups on WORKING DAYS ONLY
+  // Check if today is a working day; if today is an OFF DAY, do NOT add tasks for today!
+  const isTodayOffDay = weeklyOffDays.includes(parseISODate(todayISO).getDay());
+
+  if (!isTodayOffDay) {
+    // Today is a working day, add sample active tasks
+    tasks.push({
+      id: `task-meeting-today-${todayISO}`,
+      title: 'Operations Sync with Logistics Lead',
+      type: 'meeting',
+      date: todayISO,
+      startTime: '11:30',
+      endTime: '12:30',
+      durationMinutes: 60,
+      status: 'completed',
+      priority: 'high',
+      notes: 'Review finalized quotation pricing, dispatch timelines, and SLA provisions.',
+      category: 'Meetings',
+      project: 'Client Relations',
+      meetingWith: 'David Miller (Apex Retailers)',
+      locationOrLink: 'Conference Room 2 / Google Meet',
+      createdAt: `${todayISO}T08:00:00Z`,
+      completedAt: `${todayISO}T12:28:00Z`,
+      isImportant: true,
+    });
+
+    tasks.push({
+      id: `task-followup-today-${todayISO}`,
+      title: 'Follow-up — Client Quotation Approval',
+      type: 'follow_up',
+      date: todayISO,
+      startTime: '14:00',
+      endTime: '14:30',
+      durationMinutes: 30,
+      status: 'completed',
+      priority: 'high',
+      notes: 'Confirm purchase order signing and logistics timeline alignment.',
+      category: 'Follow-up',
+      project: 'Lead Generation',
+      contactName: 'Sarah Jenkins (ABC Company)',
+      createdAt: `${todayISO}T08:00:00Z`,
+      completedAt: `${todayISO}T14:25:00Z`,
+      isImportant: true,
+    });
+  }
+
+  // Sample tasks on upcoming working day: Sunday Oct 4, 2026 (day 0)
+  tasks.push({
+    id: 'task-meeting-sun-oct4',
+    title: 'Operations Sync with Logistics Lead',
+    type: 'meeting',
+    date: '2026-10-04',
+    startTime: '11:30',
+    endTime: '12:30',
+    durationMinutes: 60,
+    status: 'planned',
+    priority: 'high',
+    notes: 'Review finalized quotation pricing, dispatch timelines, and SLA provisions.',
+    category: 'Meetings',
+    project: 'Client Relations',
+    meetingWith: 'David Miller (Apex Retailers)',
+    locationOrLink: 'Conference Room 2 / Google Meet',
+    createdAt: '2026-10-01T08:00:00Z',
+    isImportant: true,
+  });
+
+  tasks.push({
+    id: 'task-followup-sun-oct4',
+    title: 'Follow-up — Client Quotation Approval',
+    type: 'follow_up',
+    date: '2026-10-04',
+    startTime: '14:00',
+    endTime: '14:30',
+    durationMinutes: 30,
+    status: 'planned',
+    priority: 'high',
+    notes: 'Confirm purchase order signing and logistics timeline alignment.',
+    category: 'Follow-up',
+    project: 'Lead Generation',
+    contactName: 'Sarah Jenkins (ABC Company)',
+    createdAt: '2026-10-01T08:00:00Z',
+    isImportant: true,
+  });
 
   // Add specialized Meetings and Follow-ups
   // Today's Meeting: 13:30 Commercial Terms Alignment with Apex
@@ -521,7 +687,9 @@ export function generateInitialTasks(): Task[] {
     isImportant: true,
   });
 
-  return tasks;
+  // STRICT GUARANTEE: OFF DAY = ZERO TASKS
+  // Ensure that no task on any weekly off day or custom off day is ever returned
+  return tasks.filter(t => !isDateOff(t.date, weeklyOffDays));
 }
 
 export const INITIAL_WEEKLY_REPORTS: WeeklyReportRecord[] = [

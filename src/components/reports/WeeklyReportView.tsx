@@ -32,6 +32,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { WeeklyReflection, Task } from '../../types';
+import { AppLogo } from '../common/AppLogo';
 
 export const WeeklyReportView: React.FC = () => {
   const {
@@ -299,84 +300,87 @@ export const WeeklyReportView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Week Selector Bar & Action Controls (no-print) */}
-      <div className="bg-white border border-neutral-200 rounded-lg p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs no-print">
-        <div className="flex items-center flex-wrap gap-3">
-          <div className="flex items-center border border-neutral-200 rounded-md bg-white">
+      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs no-print">
+        <div className="flex items-center flex-wrap gap-2.5 sm:gap-3">
+          <div className="flex items-center border border-[#E5E7EB] rounded-md bg-white">
             <button
               onClick={handlePrevWeek}
-              className="p-1.5 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 rounded-l-md transition-colors"
+              className="p-1.5 text-[#4B5563] hover:text-[#111111] hover:bg-neutral-50 rounded-l-md transition-colors cursor-pointer"
               title="Previous Week"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="px-3 py-1 text-xs font-mono font-semibold border-x border-neutral-200 text-neutral-900">
+            <span className="px-3 py-1 text-xs font-mono font-semibold border-x border-[#E5E7EB] text-[#111111]">
               {weekId}
             </span>
             <button
               onClick={handleNextWeek}
-              className="p-1.5 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 rounded-r-md transition-colors"
+              className="p-1.5 text-[#4B5563] hover:text-[#111111] hover:bg-neutral-50 rounded-r-md transition-colors cursor-pointer"
               title="Next Week"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="text-sm font-semibold text-neutral-900">
+          <div className="text-xs sm:text-sm font-semibold text-[#111111]">
             {formatShortDate(weekRange.startISO)} – {formatShortDate(weekRange.endISO)}, {parseISODate(weekRange.startISO).getFullYear()}
           </div>
 
           <button
             onClick={handleCurrentWeek}
-            className="text-xs text-neutral-600 hover:text-neutral-900 font-medium px-2 py-1 rounded bg-neutral-100 hover:bg-neutral-200 transition-colors"
+            className="text-xs text-[#4B5563] hover:text-[#111111] font-medium px-2 py-1 rounded bg-neutral-100 hover:bg-neutral-200 transition-colors cursor-pointer"
           >
             This Week
           </button>
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handleExportCSV}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 bg-white border border-neutral-300 rounded-md hover:bg-neutral-50 transition-colors shadow-2xs"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#111111] bg-white border border-[#E5E7EB] rounded-md hover:bg-neutral-50 transition-colors shadow-2xs cursor-pointer"
             title="Download report data as CSV spreadsheet"
           >
-            <Download className="w-3.5 h-3.5 text-neutral-600" />
+            <Download className="w-3.5 h-3.5 text-[#4B5563]" />
             <span>Export CSV</span>
           </button>
 
           <button
             onClick={handlePrint}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 bg-white border border-neutral-300 rounded-md hover:bg-neutral-50 transition-colors shadow-2xs"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#111111] bg-white border border-[#E5E7EB] rounded-md hover:bg-neutral-50 transition-colors shadow-2xs cursor-pointer"
             title="Print or save as PDF"
           >
-            <Printer className="w-3.5 h-3.5 text-neutral-600" />
+            <Printer className="w-3.5 h-3.5 text-[#4B5563]" />
             <span>Print / PDF</span>
           </button>
         </div>
       </div>
 
       {/* Printable Report Document Container */}
-      <div className="bg-white border border-neutral-200 rounded-lg p-6 sm:p-8 space-y-8 shadow-xs">
+      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-8 space-y-8 shadow-xs">
         {/* Document Header */}
-        <div className="border-b border-neutral-200 pb-5">
+        <div className="border-b border-[#E5E7EB] pb-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <span className="text-xs font-mono uppercase tracking-wider text-neutral-500 font-semibold">
-                Personal Self-Report
-              </span>
-              <h2 className="text-2xl font-bold tracking-tight text-neutral-900 mt-1">
-                Weekly Execution & Performance Review
-              </h2>
-              <p className="text-xs text-neutral-500 mt-1 font-mono">
-                {formatDisplayDate(weekRange.startISO)} → {formatDisplayDate(weekRange.endISO)} ({weekId})
-              </p>
+            <div className="flex items-start gap-3">
+              <AppLogo size="lg" variant="badge" />
+              <div>
+                <span className="text-xs font-mono uppercase tracking-wider text-[#4B5563] font-semibold">
+                  Personal Self-Report
+                </span>
+                <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#111111] mt-0.5">
+                  Weekly Execution & Performance Review
+                </h2>
+                <p className="text-xs text-[#4B5563] mt-1 font-mono">
+                  {formatDisplayDate(weekRange.startISO)} → {formatDisplayDate(weekRange.endISO)} ({weekId})
+                </p>
+              </div>
             </div>
 
-            <div className="text-left sm:text-right border-t sm:border-t-0 pt-3 sm:pt-0 border-neutral-100">
-              <div className="text-3xl font-bold font-mono text-neutral-900 tabular-nums">
+            <div className="text-left sm:text-right border-t sm:border-t-0 pt-3 sm:pt-0 border-[#E5E7EB]">
+              <div className="text-2xl sm:text-3xl font-bold font-mono text-[#111111] tabular-nums">
                 {completionRate}%
               </div>
-              <span className="text-xs font-mono text-neutral-500">
+              <span className="text-xs font-mono text-[#4B5563]">
                 Weekly Completion Rate
               </span>
             </div>
@@ -434,7 +438,7 @@ export const WeeklyReportView: React.FC = () => {
           {/* Progress Bar */}
           <div className="w-full bg-neutral-100 rounded-full h-2 overflow-hidden">
             <div
-              className="bg-neutral-900 h-2 transition-all duration-300"
+              className="bg-[#E50914] h-2 transition-all duration-500 rounded-full"
               style={{ width: `${Math.min(100, Math.max(0, completionRate))}%` }}
             />
           </div>
@@ -852,7 +856,7 @@ export const WeeklyReportView: React.FC = () => {
 
               <button
                 type="submit"
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-md transition-colors shadow-xs"
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#E50914] hover:bg-[#c80812] active:scale-[0.98] rounded-md transition-all shadow-xs shadow-[#E50914]/20 cursor-pointer"
               >
                 <Save className="w-3.5 h-3.5" />
                 <span>Save Weekly Reflection</span>

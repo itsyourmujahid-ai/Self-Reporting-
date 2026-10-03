@@ -33,7 +33,10 @@ import {
   addMinutesToTime,
   getWeekIdentifier,
   isTaskOverdue,
+  isDateOff,
+  getNextWorkingDay,
 } from '../utils/dateUtils';
+import { generateDayRecurringTasks } from '../utils/defaults';
 
 interface DailyStats {
   total: number;
@@ -85,6 +88,10 @@ interface WorkPlanContextType {
   setSelectedDate: (date: string) => void;
   currentMonth: string;
   setCurrentMonth: (month: string) => void;
+
+  // Central Off Day checks
+  isDateOffDay: (dateISO: string) => boolean;
+  getNextWorkingDayDate: (startDateISO?: string) => string;
 
   // Modals state
   isMonthlySetupOpen: boolean;
@@ -222,16 +229,81 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     saveMonthlyReports(monthlyReports);
   }, [monthlyReports]);
 
+  // Central check: Is a given date an OFF DAY?
+  const isDateOffDay = useCallback(
+    (dateISO: string): boolean => {
+      return isDateOff(dateISO, settings.weeklyOffDays, settings.customOffDates);
+    },
+    [settings.weeklyOffDays, settings.customOffDates]
+  );
+
+  const getNextWorkingDayDate = useCallback(
+    (startDateISO?: string): string => {
+      const base = startDateISO || getTodayISO();
+      return getNextWorkingDay(base, settings.weeklyOffDays, settings.customOffDates);
+    },
+    [settings.weeklyOffDays, settings.customOffDates]
+  );
+
+  // Ensure today's date always has recurring tasks generated from active templates (ONLY ON WORKING DAYS)
+  useEffect(() => {
+    const currentToday = getTodayISO();
+    if (isDateOffDay(currentToday)) return;
+    setTasksState(prev => {
+      const hasTodayTasks = prev.some(t => t.date === currentToday);
+      if (!hasTodayTasks) {
+        const generated = generateDayRecurringTasks(currentToday, templates, settings);
+        if (generated.length > 0) {
+          return [...prev, ...generated];
+        }
+      }
+      return prev;
+    });
+  }, [templates, settings, isDateOffDay]);
+
+  // Ensure any viewed selectedDate has recurring tasks generated if empty (ONLY ON WORKING DAYS)
+  useEffect(() => {
+    if (!selectedDate) return;
+    if (isDateOffDay(selectedDate)) return;
+    setTasksState(prev => {
+      const hasDateTasks = prev.some(t => t.date === selectedDate);
+      if (!hasDateTasks) {
+        const generated = generateDayRecurringTasks(selectedDate, templates, settings);
+        if (generated.length > 0) {
+          return [...prev, ...generated];
+        }
+      }
+      return prev;
+    });
+  }, [selectedDate, templates, settings, isDateOffDay]);
+
+  // STRICT CENTRAL RULE: Purge any tasks that fall on configured off days
+  useEffect(() => {
+    setTasksState(prev => {
+      const filtered = prev.filter(t => !isDateOffDay(t.date));
+      if (filtered.length !== prev.length) {
+        return filtered;
+      }
+      return prev;
+    });
+  }, [isDateOffDay]);
+
   // Modal openers
   const openMonthlySetup = useCallback(() => setIsMonthlySetupOpen(true), []);
   const closeMonthlySetup = useCallback(() => setIsMonthlySetupOpen(false), []);
 
   const openCreateTask = useCallback((defaultDate?: string, defaultType?: TaskType) => {
     setEditingTask(null);
-    setTaskModalDefaultDate(defaultDate || selectedDate || getTodayISO());
+    const candidateDate = defaultDate || selectedDate || getTodayISO();
+    // If candidate date is off day, find next working day for default date
+    let targetDate = candidateDate;
+    if (isDateOffDay(candidateDate)) {
+      targetDate = getNextWorkingDay(candidateDate, settings.weeklyOffDays, settings.customOffDates);
+    }
+    setTaskModalDefaultDate(targetDate);
     setTaskModalDefaultType(defaultType || 'one_time');
     setIsTaskModalOpen(true);
-  }, [selectedDate]);
+  }, [selectedDate, settings.weeklyOffDays, settings.customOffDates, isDateOffDay]);
 
   const openEditTask = useCallback((task: Task) => {
     setEditingTask(task);
@@ -265,6 +337,9 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Task Actions
   const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt'>): Task => {
+    if (isDateOffDay(taskData.date)) {
+      throw new Error('This is an OFF DAY. Tasks cannot be scheduled on this date.');
+    }
     const newTask: Task = {
       ...taskData,
       id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -272,9 +347,12 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
     setTasksState(prev => [...prev, newTask]);
     return newTask;
-  }, []);
+  }, [isDateOffDay]);
 
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
+    if (updates.date && isDateOffDay(updates.date)) {
+      throw new Error('This is an OFF DAY. Tasks cannot be scheduled on this date.');
+    }
     setTasksState(prev =>
       prev.map(task => {
         if (task.id === id) {
@@ -289,7 +367,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return task;
       })
     );
-  }, []);
+  }, [isDateOffDay]);
 
   const deleteTask = useCallback((id: string) => {
     setTasksState(prev => prev.filter(t => t.id !== id));
@@ -364,6 +442,9 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const rescheduleTask = useCallback((id: string, newDate: string, newTime?: string) => {
+    if (isDateOffDay(newDate)) {
+      throw new Error('This is an OFF DAY. Tasks cannot be scheduled on this date.');
+    }
     setTasksState(prev =>
       prev.map(task => {
         if (task.id !== id) return task;
@@ -378,7 +459,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         };
       })
     );
-  }, []);
+  }, [isDateOffDay]);
 
   const updateTaskNotes = useCallback((id: string, notes: string) => {
     setTasksState(prev =>
@@ -403,6 +484,9 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const completeFollowUpAndScheduleNext = useCallback(
     (sourceTaskId: string, nextDate: string, nextTime: string, nextTitle: string, notes?: string) => {
+      if (isDateOffDay(nextDate)) {
+        throw new Error('This is an OFF DAY. Tasks cannot be scheduled on this date.');
+      }
       // 1. Mark source task as completed
       const sourceTask = tasks.find(t => t.id === sourceTaskId);
       updateTask(sourceTaskId, { status: 'completed' });
@@ -425,7 +509,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       closeFollowUpModal();
     },
-    [tasks, updateTask, addTask, closeFollowUpModal]
+    [tasks, updateTask, addTask, closeFollowUpModal, isDateOffDay]
   );
 
   const completeMeeting = useCallback(
@@ -444,6 +528,9 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       // Optionally schedule next follow-up
       if (followUpDate) {
+        if (isDateOffDay(followUpDate)) {
+          throw new Error('This is an OFF DAY. Tasks cannot be scheduled on this date.');
+        }
         addTask({
           title: followUpTitle || `Follow-up after meeting: ${sourceTask?.meetingWith || sourceTask?.title}`,
           type: 'follow_up',
@@ -462,7 +549,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       closeMeetingModal();
     },
-    [tasks, updateTask, addTask, closeMeetingModal]
+    [tasks, updateTask, addTask, closeMeetingModal, isDateOffDay]
   );
 
   // Generate Month Schedule
@@ -510,11 +597,10 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Precalculate first and last working days of the month for monthly recurring rules
       let lastWorkingDayOfMonth = lastDay;
       for (let d = lastDay; d >= 1; d--) {
-        const dObj = new Date(year, monthIndex, d);
-        const dow = dObj.getDay();
-        const isOff = config.weeklyOffDays.includes(dow);
-        const isWork = config.workingDays ? config.workingDays.includes(dow) : !isOff;
-        if (!isOff && isWork) {
+        const dateObj = new Date(year, monthIndex, d);
+        const dateISO = formatISODate(dateObj);
+        const isOff = isDateOff(dateISO, config.weeklyOffDays, config.customOffDates);
+        if (!isOff) {
           lastWorkingDayOfMonth = d;
           break;
         }
@@ -522,11 +608,10 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       let firstWorkingDayOfMonth = 1;
       for (let d = 1; d <= lastDay; d++) {
-        const dObj = new Date(year, monthIndex, d);
-        const dow = dObj.getDay();
-        const isOff = config.weeklyOffDays.includes(dow);
-        const isWork = config.workingDays ? config.workingDays.includes(dow) : !isOff;
-        if (!isOff && isWork) {
+        const dateObj = new Date(year, monthIndex, d);
+        const dateISO = formatISODate(dateObj);
+        const isOff = isDateOff(dateISO, config.weeklyOffDays, config.customOffDates);
+        if (!isOff) {
           firstWorkingDayOfMonth = d;
           break;
         }
@@ -536,8 +621,14 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const dateObj = new Date(year, monthIndex, d);
         const dateISO = formatISODate(dateObj);
         const dayOfWeek = dateObj.getDay(); // 0 = Sun, ..., 6 = Sat
-        const isOffDay = config.weeklyOffDays.includes(dayOfWeek);
-        const isWorkingDay = config.workingDays ? config.workingDays.includes(dayOfWeek) : !isOffDay;
+        const isOffDay = isDateOff(dateISO, config.weeklyOffDays, config.customOffDates);
+
+        // STRICT CENTRAL RULE: OFF DAY = ZERO TASKS! Skip completely!
+        if (isOffDay) {
+          continue;
+        }
+
+        const isWorkingDay = config.workingDays ? config.workingDays.includes(dayOfWeek) : true;
 
         activeTmpls.forEach(tmpl => {
           // Check date bounds if configured on the template
@@ -550,17 +641,11 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
           let shouldGenerate = false;
 
-          // Frequency logic
+          // Frequency logic - already guaranteed NOT an off day
           if (tmpl.frequency === 'daily') {
-            // Daily tasks generate on working days by default
-            if (tmpl.generateOnlyOnWorkingDays === false) {
-              shouldGenerate = true;
-            } else if (!isOffDay && isWorkingDay) {
-              shouldGenerate = true;
-            }
+            shouldGenerate = true;
           } else if (tmpl.frequency === 'weekly' || tmpl.frequency === 'multiple_times_per_week' || tmpl.frequency === 'custom') {
-            // Check if this day of week matches template configuration and is not an off day
-            if (tmpl.daysOfWeek.includes(dayOfWeek) && !isOffDay) {
+            if (tmpl.daysOfWeek.includes(dayOfWeek)) {
               shouldGenerate = true;
             }
           } else if (tmpl.frequency === 'monthly') {
@@ -606,12 +691,15 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
       }
 
-      // Add user's configured important dates for the month (prevent duplicates)
+      // Add user's configured important dates for the month (prevent duplicates, skip off days)
       const existingTitlesAndDates = new Set(
         [...manualMonthTasks, ...modifiedRecurringTasks].map(t => `${t.title.toLowerCase()}_${t.date}`)
       );
 
       config.importantDates.forEach((item, idx) => {
+        if (isDateOff(item.date, config.weeklyOffDays, config.customOffDates)) {
+          return; // Skip off days!
+        }
         const itemKey = `${item.title.toLowerCase()}_${item.date}`;
         if (!existingTitlesAndDates.has(itemKey)) {
           newGeneratedTasks.push({
@@ -637,9 +725,12 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       });
 
-      // Add user's one-time planned tasks
+      // Add user's one-time planned tasks (skip off days)
       if (config.oneTimeTasks && config.oneTimeTasks.length > 0) {
         config.oneTimeTasks.forEach((ot, idx) => {
+          if (isDateOff(ot.date, config.weeklyOffDays, config.customOffDates)) {
+            return; // Skip off days!
+          }
           const otKey = `${ot.title.toLowerCase()}_${ot.date}`;
           if (!existingTitlesAndDates.has(otKey)) {
             newGeneratedTasks.push({
@@ -673,19 +764,22 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         ...prev,
         weeklyOffDays: config.weeklyOffDays,
         workingDays: config.workingDays || prev.workingDays,
+        customOffDates: config.customOffDates || prev.customOffDates,
         workDayStart: config.workDayStart || prev.workDayStart,
         workDayEnd: config.workDayEnd || prev.workDayEnd,
         configuredMonths: updatedConfigured,
         monthlyNotes: updatedNotes,
       }));
 
-      // Combine all preserved tasks and new generated tasks
-      setTasksState([
+      // Combine all preserved tasks and new generated tasks, strictly filtering out any tasks on off days
+      const allNewTasks = [
         ...tasksOutsideMonth,
         ...manualMonthTasks,
         ...modifiedRecurringTasks,
         ...newGeneratedTasks,
-      ]);
+      ].filter(t => !isDateOff(t.date, config.weeklyOffDays, config.customOffDates));
+
+      setTasksState(allNewTasks);
 
       closeMonthlySetup();
     },
@@ -711,8 +805,19 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Settings
   const updateSettings = useCallback((newSettings: Partial<UserSettings>) => {
-    setSettingsState(prev => ({ ...prev, ...newSettings }));
-  }, []);
+    setSettingsState(prev => {
+      const merged = { ...prev, ...newSettings };
+      return merged;
+    });
+    // STRICT RULE: If off days change, purge tasks on newly configured off days
+    if (newSettings.weeklyOffDays || newSettings.customOffDates) {
+      setTasksState(prev => {
+        const offDays = newSettings.weeklyOffDays || settings.weeklyOffDays;
+        const customOffs = newSettings.customOffDates || settings.customOffDates;
+        return prev.filter(t => !isDateOff(t.date, offDays, customOffs));
+      });
+    }
+  }, [settings.weeklyOffDays, settings.customOffDates]);
 
   // Reports
   const saveWeeklyReflection = useCallback(
@@ -797,6 +902,21 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Live Statistics Calculations
   const getDailyStats = useCallback(
     (dateISO: string): DailyStats => {
+      // STRICT CENTRAL RULE: IF date.isOffDay === true -> ZERO TASKS
+      if (isDateOffDay(dateISO)) {
+        return {
+          total: 0,
+          completed: 0,
+          remaining: 0,
+          pending: 0,
+          inProgress: 0,
+          skipped: 0,
+          overdue: 0,
+          rescheduled: 0,
+          completionRate: 0,
+        };
+      }
+
       const dayTasks = tasks.filter(t => t.date === dateISO);
       const total = dayTasks.length;
       const completed = dayTasks.filter(t => t.status === 'completed').length;
@@ -1032,6 +1152,8 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setSelectedDate,
         currentMonth,
         setCurrentMonth,
+        isDateOffDay,
+        getNextWorkingDayDate,
         isMonthlySetupOpen,
         openMonthlySetup,
         closeMonthlySetup,

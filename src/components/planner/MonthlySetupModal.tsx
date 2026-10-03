@@ -13,8 +13,8 @@ import {
   FileText,
   AlertTriangle,
 } from 'lucide-react';
-import { DAY_NAMES, MONTH_NAMES, getTodayISO } from '../../utils/dateUtils';
-import { TaskType, TaskPriority, OneTimePlannedTask } from '../../types';
+import { DAY_NAMES, MONTH_NAMES, getTodayISO, isDateOff, parseISODate } from '../../utils/dateUtils';
+import { TaskType, TaskPriority, OneTimePlannedTask, Task } from '../../types';
 
 export const MonthlySetupModal: React.FC = () => {
   const {
@@ -27,6 +27,8 @@ export const MonthlySetupModal: React.FC = () => {
     setSelectedDate,
     currentMonth,
     addTemplate,
+    tasks,
+    deleteTask,
   } = useWorkPlan();
 
   const todayISO = getTodayISO();
@@ -96,9 +98,29 @@ export const MonthlySetupModal: React.FC = () => {
     }
   }, [isMonthlySetupOpen, currentMonth, settings, templates, todayISO]);
 
+  const [conflictDayIndex, setConflictDayIndex] = useState<number | null>(null);
+  const [conflictTasks, setConflictTasks] = useState<Task[]>([]);
+
+  const isNewImpDateOff = isDateOff(newImpDate, weeklyOffDays);
+  const isNewOtDateOff = isDateOff(newOtDate, weeklyOffDays);
+
   if (!isMonthlySetupOpen) return null;
 
   const toggleOffDay = (dayIndex: number) => {
+    const isCurrentlyOff = weeklyOffDays.includes(dayIndex);
+    if (!isCurrentlyOff) {
+      // Check if tasks already exist on this day in targetMonth
+      const monthConflicts = tasks.filter(t => {
+        if (!t.date.startsWith(targetMonth)) return false;
+        const d = parseISODate(t.date);
+        return d.getDay() === dayIndex;
+      });
+      if (monthConflicts.length > 0) {
+        setConflictDayIndex(dayIndex);
+        setConflictTasks(monthConflicts);
+        return;
+      }
+    }
     setWeeklyOffDays(prev => {
       const updated = prev.includes(dayIndex)
         ? prev.filter(d => d !== dayIndex)
@@ -109,6 +131,23 @@ export const MonthlySetupModal: React.FC = () => {
     });
   };
 
+  const handleConfirmConflictRemoval = () => {
+    if (conflictDayIndex === null) return;
+    conflictTasks.forEach(t => deleteTask(t.id));
+    setWeeklyOffDays(prev => {
+      const updated = [...prev, conflictDayIndex].sort();
+      setWorkingDays([0, 1, 2, 3, 4, 5, 6].filter(d => !updated.includes(d)));
+      return updated;
+    });
+    setConflictDayIndex(null);
+    setConflictTasks([]);
+  };
+
+  const handleCancelConflict = () => {
+    setConflictDayIndex(null);
+    setConflictTasks([]);
+  };
+
   const toggleTemplateSelection = (id: string) => {
     setSelectedTemplateIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
@@ -116,7 +155,7 @@ export const MonthlySetupModal: React.FC = () => {
   };
 
   const handleAddImportantDate = () => {
-    if (!newImpDate || !newImpTitle.trim()) return;
+    if (!newImpDate || !newImpTitle.trim() || isNewImpDateOff) return;
     setImportantDates(prev => [
       ...prev,
       {
@@ -134,7 +173,7 @@ export const MonthlySetupModal: React.FC = () => {
   };
 
   const handleAddOneTimeTask = () => {
-    if (!newOtDate || !newOtTitle.trim()) return;
+    if (!newOtDate || !newOtTitle.trim() || isNewOtDateOff) return;
     setOneTimeTasks(prev => [
       ...prev,
       {
@@ -176,72 +215,74 @@ export const MonthlySetupModal: React.FC = () => {
   const isAlreadyConfigured = settings.configuredMonths.includes(targetMonth);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/40 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-white rounded-lg shadow-xl border border-neutral-200 overflow-hidden my-6">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-neutral-950/40 backdrop-blur-xs overflow-y-auto">
+      <div className="relative w-full sm:max-w-2xl bg-white rounded-t-2xl sm:rounded-xl shadow-2xl border border-[#E5E7EB] overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh] animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 bg-neutral-50/50">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[#E5E7EB] bg-white shrink-0">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-neutral-900">
+              <span className="w-2 h-2 rounded-full bg-[#E50914] shrink-0" />
+              <h2 className="text-sm sm:text-base font-bold text-[#111111]">
                 Monthly Planning Setup
               </h2>
-              <span className="text-xs font-mono font-medium text-neutral-700 bg-neutral-100 border border-neutral-200 px-2 py-0.5 rounded">
+              <span className="text-xs font-mono font-medium text-[#111111] bg-neutral-100 border border-[#E5E7EB] px-2 py-0.5 rounded">
                 {monthLabel}
               </span>
             </div>
-            <p className="text-xs text-neutral-500 mt-0.5">
+            <p className="text-xs text-[#4B5563] mt-0.5">
               Configure working cadence, routine templates, and generate your schedule
             </p>
           </div>
           <button
             onClick={closeMonthlySetup}
-            className="p-1 text-neutral-400 hover:text-neutral-700 rounded-md transition-colors"
+            className="p-1.5 text-[#4B5563] hover:text-[#111111] hover:bg-neutral-100 rounded-md transition-colors"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Step Tabs */}
-        <div className="flex border-b border-neutral-200 px-6 bg-neutral-50/40 overflow-x-auto">
+        <div className="flex border-b border-[#E5E7EB] px-4 sm:px-6 bg-white overflow-x-auto shrink-0 scrollbar-none">
           <button
             onClick={() => setStep(1)}
             className={`py-2.5 px-3 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
               step === 1
-                ? 'border-neutral-900 text-neutral-900 font-semibold'
-                : 'border-transparent text-neutral-500 hover:text-neutral-800'
+                ? 'border-[#E50914] text-[#E50914] font-bold'
+                : 'border-transparent text-[#4B5563] hover:text-[#111111]'
             }`}
           >
-            1. Month & Working Days
+            1. Working Days
           </button>
           <button
             onClick={() => setStep(2)}
             className={`py-2.5 px-3 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
               step === 2
-                ? 'border-neutral-900 text-neutral-900 font-semibold'
-                : 'border-transparent text-neutral-500 hover:text-neutral-800'
+                ? 'border-[#E50914] text-[#E50914] font-bold'
+                : 'border-transparent text-[#4B5563] hover:text-[#111111]'
             }`}
           >
-            2. Recurring Templates ({selectedTemplateIds.length})
+            2. Templates ({selectedTemplateIds.length})
           </button>
           <button
             onClick={() => setStep(3)}
             className={`py-2.5 px-3 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
               step === 3
-                ? 'border-neutral-900 text-neutral-900 font-semibold'
-                : 'border-transparent text-neutral-500 hover:text-neutral-800'
+                ? 'border-[#E50914] text-[#E50914] font-bold'
+                : 'border-transparent text-[#4B5563] hover:text-[#111111]'
             }`}
           >
-            3. Key Dates & Tasks ({importantDates.length + oneTimeTasks.length})
+            3. Key Dates ({importantDates.length + oneTimeTasks.length})
           </button>
           <button
             onClick={() => setStep(4)}
             className={`py-2.5 px-3 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
               step === 4
-                ? 'border-neutral-900 text-neutral-900 font-semibold'
-                : 'border-transparent text-neutral-500 hover:text-neutral-800'
+                ? 'border-[#E50914] text-[#E50914] font-bold'
+                : 'border-transparent text-[#4B5563] hover:text-[#111111]'
             }`}
           >
-            4. Review & Notes
+            4. Review & Build
           </button>
         </div>
 
@@ -328,13 +369,13 @@ export const MonthlySetupModal: React.FC = () => {
                   })}
                 </div>
 
-                <div className="p-3 bg-neutral-50 rounded-md border border-neutral-200 text-xs text-neutral-600 mt-3 space-y-1">
-                  <p className="font-semibold text-neutral-900">
-                    Important Off-Day Behavior (Friday & Saturday default):
+                <div className="p-3 bg-amber-50/70 rounded-md border border-amber-200 text-xs text-amber-900 mt-3 space-y-1">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>Strict Off-Day Rule (Zero Tasks):</span>
                   </p>
-                  <p>
-                    Off days only prevent normal recurring tasks from generating automatically.
-                    An off day does <strong>NOT</strong> disable scheduling. You can still schedule special tasks, follow-ups, or meetings on off days anytime!
+                  <p className="text-amber-800 text-[11px] leading-relaxed">
+                    When a date is configured as an OFF DAY, zero tasks can exist or be scheduled on it. All recurring tasks, routines, meetings, and follow-ups automatically skip off days.
                   </p>
                 </div>
               </div>
@@ -493,8 +534,15 @@ export const MonthlySetupModal: React.FC = () => {
                         type="date"
                         value={newImpDate}
                         onChange={e => setNewImpDate(e.target.value)}
-                        className="w-full px-2 py-1 text-xs border border-neutral-300 rounded bg-white font-mono"
+                        className={`w-full px-2 py-1 text-xs border rounded bg-white font-mono ${
+                          isNewImpDateOff ? 'border-rose-500 text-rose-800' : 'border-neutral-300'
+                        }`}
                       />
+                      {isNewImpDateOff && (
+                        <p className="text-[10px] text-rose-600 font-semibold mt-0.5">
+                          ⚠️ Off Day
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-[11px] text-neutral-600 mb-1">Time</label>
@@ -510,8 +558,13 @@ export const MonthlySetupModal: React.FC = () => {
                   <div className="flex justify-end">
                     <button
                       type="button"
+                      disabled={isNewImpDateOff}
                       onClick={handleAddImportantDate}
-                      className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-neutral-900 bg-white border border-neutral-300 hover:bg-neutral-100 rounded transition-colors"
+                      className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded transition-colors ${
+                        isNewImpDateOff
+                          ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed border border-neutral-200'
+                          : 'text-neutral-900 bg-white border border-neutral-300 hover:bg-neutral-100 cursor-pointer'
+                      }`}
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Add Milestone</span>
@@ -572,8 +625,15 @@ export const MonthlySetupModal: React.FC = () => {
                         type="date"
                         value={newOtDate}
                         onChange={e => setNewOtDate(e.target.value)}
-                        className="w-full px-2 py-1 text-xs border border-neutral-300 rounded bg-white font-mono"
+                        className={`w-full px-2 py-1 text-xs border rounded bg-white font-mono ${
+                          isNewOtDateOff ? 'border-rose-500 text-rose-800' : 'border-neutral-300'
+                        }`}
                       />
+                      {isNewOtDateOff && (
+                        <p className="text-[10px] text-rose-600 font-semibold mt-0.5">
+                          ⚠️ Off Day
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-[11px] text-neutral-600 mb-1">Start Time</label>
@@ -589,8 +649,13 @@ export const MonthlySetupModal: React.FC = () => {
                   <div className="flex justify-end">
                     <button
                       type="button"
+                      disabled={isNewOtDateOff}
                       onClick={handleAddOneTimeTask}
-                      className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-neutral-900 bg-white border border-neutral-300 hover:bg-neutral-100 rounded transition-colors"
+                      className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded transition-colors ${
+                        isNewOtDateOff
+                          ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed border border-neutral-200'
+                          : 'text-neutral-900 bg-white border border-neutral-300 hover:bg-neutral-100 cursor-pointer'
+                      }`}
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Add One-Time Task</span>
@@ -720,7 +785,7 @@ export const MonthlySetupModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setStep((step + 1) as any)}
-                className="px-4 py-1.5 text-xs font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-md shadow-xs"
+                className="px-4 py-2 text-xs font-semibold text-white bg-[#E50914] hover:bg-[#c80812] active:scale-[0.98] rounded-md shadow-xs shadow-[#E50914]/20 transition-all cursor-pointer"
               >
                 Next Step
               </button>
@@ -728,7 +793,7 @@ export const MonthlySetupModal: React.FC = () => {
               <button
                 type="button"
                 onClick={handleFinish}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-md shadow-xs font-semibold"
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#E50914] hover:bg-[#c80812] active:scale-[0.98] rounded-md shadow-xs shadow-[#E50914]/20 transition-all cursor-pointer"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>Confirm & Generate Plan</span>
@@ -737,6 +802,75 @@ export const MonthlySetupModal: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Existing Tasks Conflict Modal (Requirement 7) */}
+      {conflictDayIndex !== null && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-neutral-950/50 backdrop-blur-xs">
+          <div className="w-full max-w-lg bg-white rounded-xl shadow-2xl border border-amber-300 p-5 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2 text-amber-700">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <h3 className="text-sm sm:text-base font-bold text-[#111111]">
+                  Existing Tasks Conflict: {DAY_NAMES[conflictDayIndex]}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelConflict}
+                className="text-neutral-400 hover:text-neutral-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-[#4B5563]">
+              <p>
+                You are setting <strong>{DAY_NAMES[conflictDayIndex]}</strong> as an <strong>OFF DAY</strong> for <strong>{monthLabel}</strong>.
+              </p>
+              <p className="p-2.5 rounded bg-amber-50 border border-amber-200 text-amber-900 font-medium">
+                Under the strict scheduling rule, an OFF DAY must have <strong>zero tasks</strong>. There are currently <strong>{conflictTasks.length} task(s)</strong> already scheduled on this day in {monthLabel}.
+              </p>
+              <p>
+                Before this day can become a true OFF DAY, existing tasks must be removed or cancelled.
+              </p>
+            </div>
+
+            {/* List of conflicting tasks */}
+            <div className="max-h-48 overflow-y-auto space-y-1.5 border border-neutral-200 rounded p-2 bg-neutral-50/50">
+              {conflictTasks.map(t => (
+                <div key={t.id} className="p-2 bg-white border border-neutral-200 rounded text-xs flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[#111111] truncate">{t.title}</p>
+                    <p className="text-[11px] text-[#4B5563] font-mono">
+                      {t.date} {t.startTime ? `· ${t.startTime}` : ''} · <span className="capitalize">{t.status}</span>
+                    </p>
+                  </div>
+                  <span className="text-[10px] uppercase font-bold text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded shrink-0">
+                    {t.type.replace('_', ' ')}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-200">
+              <button
+                type="button"
+                onClick={handleCancelConflict}
+                className="px-3.5 py-2 text-xs font-semibold text-[#4B5563] hover:text-[#111111] hover:bg-neutral-100 rounded-md transition-colors cursor-pointer"
+              >
+                Keep Tasks (Cancel)
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmConflictRemoval}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-md shadow-xs transition-all cursor-pointer"
+              >
+                Remove {conflictTasks.length} Task(s) & Set OFF DAY
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

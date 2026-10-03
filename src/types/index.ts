@@ -72,6 +72,7 @@ export interface UserSettings {
   // Default weekly off days: Friday (5) and Saturday (6)
   weeklyOffDays: number[];
   workingDays: number[];
+  customOffDates?: string[]; // Optional specific custom off dates (YYYY-MM-DD)
   workDayStart: string; // "09:00"
   workDayEnd: string; // "18:00"
   defaultTaskDuration: number; // in minutes
@@ -131,6 +132,7 @@ export interface MonthlyPlanConfig {
   month: string; // YYYY-MM
   workingDays: number[];
   weeklyOffDays: number[];
+  customOffDates?: string[];
   workDayStart: string;
   workDayEnd: string;
   selectedTemplateIds: string[];

@@ -1,8 +1,64 @@
 @import "tailwindcss";
 
 @layer base {
+  :root {
+    --color-bg-app: #F3F4F6;
+    --color-surface-card: #FFFFFF;
+    --color-text-primary: #111111;
+    --color-text-secondary: #4B5563;
+    --color-brand-primary: #E50914;
+    --color-border: #E5E7EB;
+  }
+
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #F3F4F6;
+    color: #111111;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Liquid View Transition Keyframes */
+@keyframes liquidPageEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(5px) scale(0.996);
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.animate-liquid-page {
+  animation: liquidPageEnter 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity, filter;
+}
+
+/* Responsive focus rings with brand red */
+.focus-brand {
+  outline: none;
+}
+.focus-brand:focus-visible {
+  outline: 2px solid #E50914;
+  outline-offset: 1px;
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-liquid-page {
+    animation: none !important;
   }
 }
 
@@ -18,4 +74,3 @@
     color: #000000 !important;
   }
 }
-

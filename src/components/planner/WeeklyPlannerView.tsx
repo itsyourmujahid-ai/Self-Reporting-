@@ -3,7 +3,6 @@ import { useWorkPlan } from '../../context/WorkPlanContext';
 import {
   getWeekRange,
   getDaysOfWeek,
-  formatDisplayDate,
   formatShortDate,
   parseISODate,
   formatISODate,
@@ -17,9 +16,7 @@ import {
   Plus,
   CheckCircle2,
   Circle,
-  Calendar,
 } from 'lucide-react';
-import { Task } from '../../types';
 
 export const WeeklyPlannerView: React.FC = () => {
   const {
@@ -58,39 +55,39 @@ export const WeeklyPlannerView: React.FC = () => {
   return (
     <div className="space-y-5">
       {/* Header bar */}
-      <div className="bg-white border border-neutral-200 rounded-lg p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center border border-neutral-200 rounded-md bg-white">
+      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+        <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+          <div className="flex items-center border border-[#E5E7EB] rounded-md bg-white">
             <button
               onClick={handlePrevWeek}
-              className="p-1.5 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 rounded-l-md transition-colors"
+              className="p-1.5 text-[#4B5563] hover:text-[#111111] hover:bg-neutral-50 rounded-l-md transition-colors cursor-pointer"
               title="Previous Week"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={handleGoCurrentWeek}
-              className="px-3 py-1 text-xs font-medium border-x border-neutral-200 text-neutral-700 hover:bg-neutral-50 transition-colors"
+              className="px-3 py-1.5 text-xs font-semibold border-x border-[#E5E7EB] text-[#111111] hover:bg-neutral-50 transition-colors cursor-pointer"
             >
               Current Week
             </button>
             <button
               onClick={handleNextWeek}
-              className="p-1.5 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 rounded-r-md transition-colors"
+              className="p-1.5 text-[#4B5563] hover:text-[#111111] hover:bg-neutral-50 rounded-r-md transition-colors cursor-pointer"
               title="Next Week"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
-          <h2 className="text-base font-bold text-neutral-900 tracking-tight">
+          <h2 className="text-sm sm:text-base font-bold text-[#111111] tracking-tight">
             Week of {formatShortDate(weekRange.startISO)} – {formatShortDate(weekRange.endISO)}
           </h2>
         </div>
 
         <button
           onClick={() => openCreateTask(activeDate)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-md transition-colors shadow-xs"
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-[#E50914] hover:bg-[#c80812] active:scale-[0.98] rounded-md transition-all shadow-xs shadow-[#E50914]/20 cursor-pointer self-start sm:self-auto"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Add Task</span>
@@ -115,18 +112,22 @@ export const WeeklyPlannerView: React.FC = () => {
           return (
             <div
               key={dayISO}
-              className={`bg-white border rounded-lg flex flex-col min-h-[380px] overflow-hidden ${
+              className={`bg-white border rounded-xl flex flex-col min-h-0 md:min-h-[380px] overflow-hidden shadow-xs transition-all ${
                 isToday
-                  ? 'border-neutral-900 ring-1 ring-neutral-900'
+                  ? 'border-[#E50914] ring-1 ring-[#E50914]'
                   : isOff
-                  ? 'border-neutral-200 bg-amber-50/15'
-                  : 'border-neutral-200'
+                  ? 'border-[#E5E7EB] bg-amber-50/15'
+                  : 'border-[#E5E7EB]'
               }`}
             >
               {/* Column Day Header */}
               <div
-                className={`p-3 border-b flex items-center justify-between cursor-pointer ${
-                  isOff ? 'bg-amber-50/40 border-amber-200/60' : 'bg-neutral-50/60 border-neutral-200'
+                className={`p-3 border-b flex items-center justify-between cursor-pointer transition-colors ${
+                  isToday
+                    ? 'bg-[#E50914]/6 border-b-[#E50914]/30'
+                    : isOff
+                    ? 'bg-amber-50/40 border-amber-200/60'
+                    : 'bg-neutral-50/60 border-[#E5E7EB] hover:bg-neutral-100/50'
                 }`}
                 onClick={() => {
                   setSelectedDate(dayISO);
@@ -135,18 +136,20 @@ export const WeeklyPlannerView: React.FC = () => {
               >
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-neutral-900">{dayName}</span>
-                    <span className="text-[11px] font-mono text-neutral-500">
+                    <span className={`text-xs font-bold ${isToday ? 'text-[#E50914]' : 'text-[#111111]'}`}>
+                      {dayName}
+                    </span>
+                    <span className="text-[11px] font-mono text-[#4B5563]">
                       {formatShortDate(dayISO)}
                     </span>
                   </div>
                   {isOff && (
-                    <span className="text-[10px] font-medium text-amber-700">Weekly Off</span>
+                    <span className="text-[10px] font-semibold text-amber-800">Weekly Off</span>
                   )}
                 </div>
 
                 {total > 0 && (
-                  <span className="text-[10px] font-mono font-semibold text-neutral-600 tabular-nums">
+                  <span className="text-[10px] font-mono font-bold text-[#111111] tabular-nums">
                     {completed}/{total}
                   </span>
                 )}
@@ -156,7 +159,7 @@ export const WeeklyPlannerView: React.FC = () => {
               {total > 0 && (
                 <div className="w-full bg-neutral-100 h-1 overflow-hidden">
                   <div
-                    className="bg-neutral-900 h-1"
+                    className={`${isToday ? 'bg-[#E50914]' : 'bg-[#111111]'} h-1 transition-all duration-300`}
                     style={{ width: `${completionPct}%` }}
                   />
                 </div>
@@ -165,7 +168,7 @@ export const WeeklyPlannerView: React.FC = () => {
               {/* Tasks in column */}
               <div className="p-2 space-y-2 flex-1 overflow-y-auto">
                 {dayTasks.length === 0 ? (
-                  <p className="text-[11px] text-neutral-400 italic text-center py-6">
+                  <p className="text-[11px] text-[#4B5563]/50 italic text-center py-6">
                     {isOff ? 'Off day' : 'No tasks'}
                   </p>
                 ) : (
@@ -174,21 +177,21 @@ export const WeeklyPlannerView: React.FC = () => {
                     return (
                       <div
                         key={t.id}
-                        className={`p-2 rounded border text-xs transition-colors group ${
+                        className={`p-2 rounded-lg border text-xs transition-colors group ${
                           isDone
-                            ? 'bg-neutral-50/60 border-neutral-200 text-neutral-400'
-                            : 'bg-white border-neutral-200 hover:border-neutral-300'
+                            ? 'bg-neutral-50/60 border-[#E5E7EB] text-[#4B5563]/50'
+                            : 'bg-white border-[#E5E7EB] hover:border-[#111111]/30 hover:shadow-2xs'
                         }`}
                       >
                         <div className="flex items-start gap-1.5">
                           <button
                             onClick={() => toggleTaskStatus(t.id)}
-                            className="mt-0.5 text-neutral-400 hover:text-neutral-900 shrink-0"
+                            className="mt-0.5 text-[#4B5563] hover:text-[#E50914] shrink-0 cursor-pointer"
                           >
                             {isDone ? (
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                             ) : (
-                              <Circle className="w-3.5 h-3.5 hover:stroke-neutral-800" />
+                              <Circle className="w-3.5 h-3.5 hover:stroke-[#E50914]" />
                             )}
                           </button>
 
@@ -196,18 +199,18 @@ export const WeeklyPlannerView: React.FC = () => {
                             className="flex-1 min-w-0 cursor-pointer"
                             onClick={() => openEditTask(t)}
                           >
-                            <div className="flex items-center justify-between text-[10px] font-mono text-neutral-500">
-                              <span>{t.startTime || 'Unscheduled'}</span>
+                            <div className="flex items-center justify-between text-[10px] font-mono text-[#4B5563]">
+                              <span>{t.startTime || 'Anytime'}</span>
                               <div className="flex items-center gap-1">
                                 {t.status === 'in_progress' && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" title="Active in progress" />
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[#E50914] animate-pulse" title="Active in progress" />
                                 )}
                                 <span className="capitalize">{t.type.replace('_', ' ')}</span>
                               </div>
                             </div>
                             <p
-                              className={`font-medium text-xs truncate mt-0.5 ${
-                                isDone ? 'line-through text-neutral-400' : 'text-neutral-900'
+                              className={`font-semibold text-xs truncate mt-0.5 ${
+                                isDone ? 'line-through text-[#4B5563]/60' : 'text-[#111111]'
                               }`}
                             >
                               {t.title}
@@ -221,10 +224,10 @@ export const WeeklyPlannerView: React.FC = () => {
               </div>
 
               {/* Add task button in footer */}
-              <div className="p-2 border-t border-neutral-100 bg-neutral-50/30">
+              <div className="p-2 border-t border-[#E5E7EB] bg-neutral-50/30">
                 <button
                   onClick={() => openCreateTask(dayISO)}
-                  className="w-full py-1 text-[11px] text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded text-center transition-colors"
+                  className="w-full py-1 text-[11px] font-medium text-[#4B5563] hover:text-[#111111] hover:bg-neutral-100 rounded text-center transition-colors cursor-pointer"
                 >
                   + Add
                 </button>

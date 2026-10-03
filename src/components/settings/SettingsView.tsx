@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useWorkPlan } from '../../context/WorkPlanContext';
-import { DAY_NAMES } from '../../utils/dateUtils';
-import { TaskTemplate, TaskPriority, FrequencyType } from '../../types';
+import { DAY_NAMES, parseISODate } from '../../utils/dateUtils';
+import { TaskTemplate, TaskPriority, FrequencyType, Task } from '../../types';
 import {
   Save,
   Plus,
@@ -13,6 +13,8 @@ import {
   CheckCircle2,
   Clock,
   Settings as SettingsIcon,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
@@ -26,6 +28,8 @@ export const SettingsView: React.FC = () => {
     exportData,
     importData,
     resetAll,
+    tasks,
+    deleteTask,
   } = useWorkPlan();
 
   // Local state for settings form
@@ -64,11 +68,39 @@ export const SettingsView: React.FC = () => {
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [confirmDeleteTmplId, setConfirmDeleteTmplId] = useState<string | null>(null);
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+  const [conflictDayIndex, setConflictDayIndex] = useState<number | null>(null);
+  const [conflictTasks, setConflictTasks] = useState<Task[]>([]);
 
   const handleToggleOffDay = (dayIndex: number) => {
+    const isCurrentlyOff = weeklyOffDays.includes(dayIndex);
+    if (!isCurrentlyOff) {
+      // Trying to mark day as OFF DAY. Check for existing tasks!
+      const conflicting = tasks.filter(t => {
+        const d = parseISODate(t.date);
+        return d.getDay() === dayIndex;
+      });
+      if (conflicting.length > 0) {
+        setConflictDayIndex(dayIndex);
+        setConflictTasks(conflicting);
+        return;
+      }
+    }
     setWeeklyOffDays(prev =>
       prev.includes(dayIndex) ? prev.filter(d => d !== dayIndex) : [...prev, dayIndex].sort()
     );
+  };
+
+  const handleConfirmConflictRemoval = () => {
+    if (conflictDayIndex === null) return;
+    conflictTasks.forEach(t => deleteTask(t.id));
+    setWeeklyOffDays(prev => [...prev, conflictDayIndex].sort());
+    setConflictDayIndex(null);
+    setConflictTasks([]);
+  };
+
+  const handleCancelConflict = () => {
+    setConflictDayIndex(null);
+    setConflictTasks([]);
   };
 
   const handleSaveSettings = (e: React.FormEvent) => {
@@ -221,32 +253,32 @@ export const SettingsView: React.FC = () => {
   return (
     <div className="space-y-8 max-w-5xl">
       {/* Header */}
-      <div className="border-b border-neutral-200 pb-4">
-        <h1 className="text-xl font-bold tracking-tight text-neutral-900">
+      <div className="border-b border-[#E5E7EB] pb-4">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#111111]">
           Settings & Customization
         </h1>
-        <p className="text-xs text-neutral-500 mt-0.5">
+        <p className="text-xs text-[#4B5563] mt-0.5">
           Configure working cadence, routine templates, categories, and backup your workspace
         </p>
       </div>
 
       {/* Section 1: Working Schedule & Weekly Off Days */}
-      <form onSubmit={handleSaveSettings} className="bg-white border border-neutral-200 rounded-lg p-6 space-y-6 shadow-xs">
+      <form onSubmit={handleSaveSettings} className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 space-y-6 shadow-xs">
         <div>
-          <h2 className="text-sm font-bold text-neutral-900">
+          <h2 className="text-sm font-bold text-[#111111]">
             Work Schedule & Weekly Off Days
           </h2>
-          <p className="text-xs text-neutral-500 mt-0.5">
+          <p className="text-xs text-[#4B5563] mt-0.5">
             Default weekly off days are Friday and Saturday. You can customize them at any time.
           </p>
         </div>
 
         {/* Weekly Off Days selector */}
         <div>
-          <label className="block text-xs font-semibold text-neutral-800 mb-2">
+          <label className="block text-xs font-semibold text-[#111111] mb-2">
             Weekly Off Days (Non-working by default)
           </label>
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
             {DAY_NAMES.map((name, index) => {
               const isOff = weeklyOffDays.includes(index);
               return (
@@ -254,76 +286,76 @@ export const SettingsView: React.FC = () => {
                   type="button"
                   key={name}
                   onClick={() => handleToggleOffDay(index)}
-                  className={`p-2.5 text-center rounded-md border text-xs transition-colors flex flex-col items-center justify-center gap-1 ${
+                  className={`p-2 sm:p-2.5 text-center rounded-md border text-xs transition-colors flex flex-col items-center justify-center gap-1 cursor-pointer ${
                     isOff
                       ? 'bg-amber-50 border-amber-300 text-amber-900 font-semibold'
-                      : 'bg-white border-neutral-200 text-neutral-800 hover:bg-neutral-50'
+                      : 'bg-white border-[#E5E7EB] text-[#111111] hover:bg-neutral-50'
                   }`}
                 >
-                  <span>{name.slice(0, 3)}</span>
-                  <span className="text-[10px] text-neutral-500 font-normal">
+                  <span className="font-bold">{name.slice(0, 3)}</span>
+                  <span className="text-[10px] text-[#4B5563] font-normal">
                     {isOff ? 'Off Day' : 'Working'}
                   </span>
                 </button>
               );
             })}
           </div>
-          <p className="text-xs text-neutral-500 mt-1.5">
-            Off days are preserved on the calendar. You can always schedule future tasks, meetings, or follow-ups on an off day whenever desired.
+          <p className="text-xs text-[#4B5563] mt-1.5">
+            Strict Off-Day Rule: Configured off days strictly contain zero tasks. All routines, recurring tasks, meetings, and follow-ups skip off days.
           </p>
         </div>
 
         {/* Working Hours & Task Defaults */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-2">
           <div>
-            <label className="block text-xs font-medium text-neutral-700 mb-1">
+            <label className="block text-xs font-medium text-[#111111] mb-1">
               Work Day Start
             </label>
             <input
               type="time"
               value={workDayStart}
               onChange={e => setWorkDayStart(e.target.value)}
-              className="w-full px-2.5 py-1.5 text-xs border border-neutral-300 rounded font-mono bg-white"
+              className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded-md font-mono bg-white text-[#111111] focus:outline-hidden focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-neutral-700 mb-1">
+            <label className="block text-xs font-medium text-[#111111] mb-1">
               Work Day End
             </label>
             <input
               type="time"
               value={workDayEnd}
               onChange={e => setWorkDayEnd(e.target.value)}
-              className="w-full px-2.5 py-1.5 text-xs border border-neutral-300 rounded font-mono bg-white"
+              className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded-md font-mono bg-white text-[#111111] focus:outline-hidden focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-neutral-700 mb-1">
+            <label className="block text-xs font-medium text-[#111111] mb-1">
               Default Task Duration
             </label>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <input
                 type="number"
                 min="5"
                 step="5"
                 value={defaultDuration}
                 onChange={e => setDefaultDuration(parseInt(e.target.value, 10) || 30)}
-                className="w-full px-2.5 py-1.5 text-xs border border-neutral-300 rounded font-mono tabular-nums bg-white"
+                className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded-md font-mono tabular-nums bg-white text-[#111111] focus:outline-hidden focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]"
               />
-              <span className="text-xs text-neutral-500">min</span>
+              <span className="text-xs text-[#4B5563]">min</span>
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-neutral-700 mb-1">
+            <label className="block text-xs font-medium text-[#111111] mb-1">
               Default Priority
             </label>
             <select
               value={defaultPriority}
               onChange={e => setDefaultPriority(e.target.value as TaskPriority)}
-              className="w-full px-2.5 py-1.5 text-xs border border-neutral-300 rounded bg-white"
+              className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded-md bg-white text-[#111111] focus:outline-hidden focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]"
             >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -333,7 +365,7 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-2 border-t border-neutral-100">
+        <div className="flex items-center justify-between pt-2 border-t border-[#E5E7EB]">
           <div>
             {savedNotification && (
               <span className="text-xs text-emerald-700 font-medium inline-flex items-center gap-1">
@@ -344,7 +376,7 @@ export const SettingsView: React.FC = () => {
           </div>
           <button
             type="submit"
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded-md transition-colors shadow-xs"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#E50914] hover:bg-[#c80812] active:scale-[0.98] rounded-md transition-all shadow-xs shadow-[#E50914]/20 cursor-pointer"
           >
             <Save className="w-3.5 h-3.5" />
             <span>Save Preferences</span>
@@ -353,13 +385,13 @@ export const SettingsView: React.FC = () => {
       </form>
 
       {/* Section 2: Recurring Task Templates (User Routine) */}
-      <div className="bg-white border border-neutral-200 rounded-lg p-6 space-y-5 shadow-xs">
-        <div className="flex items-center justify-between">
+      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 space-y-5 shadow-xs">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h2 className="text-sm font-bold text-neutral-900">
+            <h2 className="text-sm font-bold text-[#111111]">
               Recurring Task Routine Templates
             </h2>
-            <p className="text-xs text-neutral-500 mt-0.5">
+            <p className="text-xs text-[#4B5563] mt-0.5">
               Customize your daily activities and weekly recurring habits (e.g. status poster, LinkedIn posts frequency, Reels)
             </p>
           </div>
@@ -367,14 +399,14 @@ export const SettingsView: React.FC = () => {
           <button
             type="button"
             onClick={openNewTemplateModal}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-neutral-900 bg-neutral-100 hover:bg-neutral-200 rounded-md transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#E50914] hover:bg-[#c80812] active:scale-[0.98] rounded-md transition-all shadow-xs shadow-[#E50914]/20 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Template</span>
           </button>
         </div>
 
-        <div className="border border-neutral-200 rounded-lg overflow-hidden divide-y divide-neutral-200">
+        <div className="border border-[#E5E7EB] rounded-xl overflow-hidden divide-y divide-[#E5E7EB]">
           {templates.map(tmpl => {
             const daysLabel =
               tmpl.frequency === 'daily'
@@ -486,8 +518,8 @@ export const SettingsView: React.FC = () => {
       {/* Section 3: Categories & Projects */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Categories */}
-        <div className="bg-white border border-neutral-200 rounded-lg p-5 space-y-4 shadow-xs">
-          <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider">
+        <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-5 space-y-4 shadow-xs">
+          <h3 className="text-xs font-bold text-[#111111] uppercase tracking-wider">
             Categories
           </h3>
 
@@ -497,12 +529,12 @@ export const SettingsView: React.FC = () => {
               placeholder="New category..."
               value={newCategory}
               onChange={e => setNewCategory(e.target.value)}
-              className="flex-1 px-2.5 py-1 text-xs border border-neutral-300 rounded bg-white"
+              className="flex-1 px-3 py-1.5 text-xs border border-[#E5E7EB] rounded-md bg-white text-[#111111] focus:outline-hidden focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]"
             />
             <button
               type="button"
               onClick={handleAddCategory}
-              className="px-3 py-1 text-xs font-medium text-neutral-900 bg-neutral-100 hover:bg-neutral-200 rounded"
+              className="px-3.5 py-1.5 text-xs font-semibold text-[#111111] bg-neutral-100 hover:bg-neutral-200 border border-[#E5E7EB] rounded-md cursor-pointer transition-colors"
             >
               Add
             </button>
@@ -512,14 +544,14 @@ export const SettingsView: React.FC = () => {
             {settings.categories.map(c => (
               <span
                 key={c}
-                className="inline-flex items-center gap-1.5 text-xs text-neutral-700 bg-neutral-100 border border-neutral-200 px-2 py-0.5 rounded"
+                className="inline-flex items-center gap-1.5 text-xs text-[#111111] bg-neutral-100 border border-[#E5E7EB] px-2.5 py-1 rounded-md"
               >
                 <span>{c}</span>
                 {settings.categories.length > 1 && (
                   <button
                     type="button"
                     onClick={() => handleRemoveCategory(c)}
-                    className="text-neutral-400 hover:text-rose-600"
+                    className="text-[#4B5563] hover:text-rose-600 cursor-pointer"
                   >
                     ✕
                   </button>
@@ -530,8 +562,8 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Projects */}
-        <div className="bg-white border border-neutral-200 rounded-lg p-5 space-y-4 shadow-xs">
-          <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-wider">
+        <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-5 space-y-4 shadow-xs">
+          <h3 className="text-xs font-bold text-[#111111] uppercase tracking-wider">
             Projects & Workstreams
           </h3>
 
@@ -541,12 +573,12 @@ export const SettingsView: React.FC = () => {
               placeholder="New project name..."
               value={newProject}
               onChange={e => setNewProject(e.target.value)}
-              className="flex-1 px-2.5 py-1 text-xs border border-neutral-300 rounded bg-white"
+              className="flex-1 px-3 py-1.5 text-xs border border-[#E5E7EB] rounded-md bg-white text-[#111111] focus:outline-hidden focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]"
             />
             <button
               type="button"
               onClick={handleAddProject}
-              className="px-3 py-1 text-xs font-medium text-neutral-900 bg-neutral-100 hover:bg-neutral-200 rounded"
+              className="px-3.5 py-1.5 text-xs font-semibold text-[#111111] bg-neutral-100 hover:bg-neutral-200 border border-[#E5E7EB] rounded-md cursor-pointer transition-colors"
             >
               Add
             </button>
@@ -556,14 +588,14 @@ export const SettingsView: React.FC = () => {
             {settings.projects.map(p => (
               <span
                 key={p}
-                className="inline-flex items-center gap-1.5 text-xs text-neutral-700 bg-neutral-100 border border-neutral-200 px-2 py-0.5 rounded"
+                className="inline-flex items-center gap-1.5 text-xs text-[#111111] bg-neutral-100 border border-[#E5E7EB] px-2.5 py-1 rounded-md"
               >
                 <span>{p}</span>
                 {settings.projects.length > 1 && (
                   <button
                     type="button"
                     onClick={() => handleRemoveProject(p)}
-                    className="text-neutral-400 hover:text-rose-600"
+                    className="text-[#4B5563] hover:text-rose-600 cursor-pointer"
                   >
                     ✕
                   </button>
@@ -575,12 +607,12 @@ export const SettingsView: React.FC = () => {
       </div>
 
       {/* Section 4: Data Backup & Reset */}
-      <div className="bg-white border border-neutral-200 rounded-lg p-6 space-y-4 shadow-xs">
+      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 space-y-4 shadow-xs">
         <div>
-          <h2 className="text-sm font-bold text-neutral-900">
+          <h2 className="text-sm font-bold text-[#111111]">
             Data Storage & Backup
           </h2>
-          <p className="text-xs text-neutral-500 mt-0.5">
+          <p className="text-xs text-[#4B5563] mt-0.5">
             All data is saved locally on your browser. Export your complete plan or import a backup file.
           </p>
         </div>
@@ -589,13 +621,13 @@ export const SettingsView: React.FC = () => {
           <button
             type="button"
             onClick={handleExport}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-neutral-800 bg-neutral-100 hover:bg-neutral-200 rounded-md transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-[#111111] bg-neutral-100 hover:bg-neutral-200 border border-[#E5E7EB] rounded-md transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export JSON Backup</span>
           </button>
 
-          <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-neutral-800 bg-neutral-100 hover:bg-neutral-200 rounded-md transition-colors cursor-pointer">
+          <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-[#111111] bg-neutral-100 hover:bg-neutral-200 border border-[#E5E7EB] rounded-md transition-colors cursor-pointer">
             <Upload className="w-3.5 h-3.5" />
             <span>Import JSON Backup</span>
             <input
@@ -612,14 +644,14 @@ export const SettingsView: React.FC = () => {
               <button
                 type="button"
                 onClick={handleResetData}
-                className="px-2 py-0.5 text-xs font-semibold text-white bg-rose-700 hover:bg-rose-800 rounded shadow-2xs"
+                className="px-2 py-0.5 text-xs font-semibold text-white bg-rose-700 hover:bg-rose-800 rounded shadow-2xs cursor-pointer"
               >
                 Yes, Reset
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmResetOpen(false)}
-                className="px-2 py-0.5 text-xs text-neutral-600 hover:text-neutral-900"
+                className="px-2 py-0.5 text-xs text-neutral-600 hover:text-neutral-900 cursor-pointer"
               >
                 Cancel
               </button>
@@ -628,7 +660,7 @@ export const SettingsView: React.FC = () => {
             <button
               type="button"
               onClick={() => setConfirmResetOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 rounded-md transition-colors ml-auto"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 rounded-md transition-colors ml-auto cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Reset to Sample Data</span>
@@ -643,22 +675,26 @@ export const SettingsView: React.FC = () => {
 
       {/* Template Edit Modal */}
       {isTemplateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/40 backdrop-blur-xs">
-          <div className="relative w-full max-w-md bg-white rounded-lg shadow-xl border border-neutral-200 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200 bg-neutral-50/50">
-              <h3 className="text-sm font-semibold text-neutral-900">
-                {editingTemplate ? 'Edit Recurring Routine' : 'New Recurring Routine'}
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-neutral-950/40 backdrop-blur-xs overflow-y-auto">
+          <div className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-xl shadow-2xl border border-[#E5E7EB] flex flex-col max-h-[92vh] sm:max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E7EB] bg-white shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#E50914] shrink-0" />
+                <h3 className="text-sm sm:text-base font-bold text-[#111111]">
+                  {editingTemplate ? 'Edit Recurring Routine' : 'New Recurring Routine'}
+                </h3>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsTemplateModalOpen(false)}
-                className="text-neutral-400 hover:text-neutral-700"
+                className="p-1.5 text-[#4B5563] hover:text-[#111111] hover:bg-neutral-100 rounded-md transition-colors"
+                aria-label="Close"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSaveTemplate} className="p-5 space-y-4">
+            <form onSubmit={handleSaveTemplate} className="p-5 space-y-4 overflow-y-auto">
               <div>
                 <label className="block text-xs font-medium text-neutral-700 mb-1">
                   Routine Title
@@ -757,10 +793,10 @@ export const SettingsView: React.FC = () => {
                               prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx]
                             );
                           }}
-                          className={`py-1 text-center text-xs rounded border transition-colors ${
+                          className={`py-1 text-center text-xs rounded border transition-colors cursor-pointer ${
                             isSelected
-                              ? 'bg-neutral-900 text-white font-semibold'
-                              : 'bg-white text-neutral-700 hover:bg-neutral-50'
+                              ? 'bg-[#E50914] text-white font-bold border-[#E50914]'
+                              : 'bg-white text-[#111111] hover:bg-neutral-50 border-[#E5E7EB]'
                           }`}
                         >
                           {name.slice(0, 3)}
@@ -917,12 +953,81 @@ export const SettingsView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-medium text-white bg-neutral-900 hover:bg-neutral-800 rounded shadow-xs"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-[#E50914] hover:bg-[#c80812] active:scale-[0.98] rounded-md shadow-xs shadow-[#E50914]/20 transition-all cursor-pointer"
                 >
                   Save Template
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Existing Tasks Conflict Modal (Requirement 7) */}
+      {conflictDayIndex !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/40 backdrop-blur-xs">
+          <div className="w-full max-w-lg bg-white rounded-xl shadow-2xl border border-amber-300 p-5 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2 text-amber-700">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <h3 className="text-sm sm:text-base font-bold text-[#111111]">
+                  Existing Tasks Conflict: {DAY_NAMES[conflictDayIndex]}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelConflict}
+                className="text-neutral-400 hover:text-neutral-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-[#4B5563]">
+              <p>
+                You are setting <strong>{DAY_NAMES[conflictDayIndex]}</strong> as an <strong>OFF DAY</strong>.
+              </p>
+              <p className="p-2.5 rounded bg-amber-50 border border-amber-200 text-amber-900 font-medium">
+                Under the strict scheduling rule, an OFF DAY must have <strong>zero tasks</strong>. There are currently <strong>{conflictTasks.length} task(s)</strong> scheduled on this day.
+              </p>
+              <p>
+                Before this day can become a true OFF DAY, these tasks must be removed or cancelled.
+              </p>
+            </div>
+
+            {/* List of conflicting tasks */}
+            <div className="max-h-48 overflow-y-auto space-y-1.5 border border-neutral-200 rounded p-2 bg-neutral-50/50">
+              {conflictTasks.map(t => (
+                <div key={t.id} className="p-2 bg-white border border-neutral-200 rounded text-xs flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[#111111] truncate">{t.title}</p>
+                    <p className="text-[11px] text-[#4B5563] font-mono">
+                      {t.date} {t.startTime ? `· ${t.startTime}` : ''} · <span className="capitalize">{t.status}</span>
+                    </p>
+                  </div>
+                  <span className="text-[10px] uppercase font-bold text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded shrink-0">
+                    {t.type.replace('_', ' ')}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-200">
+              <button
+                type="button"
+                onClick={handleCancelConflict}
+                className="px-3.5 py-2 text-xs font-semibold text-[#4B5563] hover:text-[#111111] hover:bg-neutral-100 rounded-md transition-colors cursor-pointer"
+              >
+                Keep Tasks (Cancel)
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmConflictRemoval}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-md shadow-xs transition-all cursor-pointer"
+              >
+                Remove {conflictTasks.length} Task(s) & Set OFF DAY
+              </button>
+            </div>
           </div>
         </div>
       )}

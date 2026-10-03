@@ -29,6 +29,7 @@ import {
   List,
   Grid,
   X,
+  Coffee,
 } from 'lucide-react';
 import { Task, TaskPriority, TaskStatus, TaskType } from '../../types';
 
@@ -49,6 +50,8 @@ export const MonthlyCalendarView: React.FC = () => {
     deleteTask,
     openMonthlySetup,
     settings,
+    isDateOffDay,
+    getNextWorkingDayDate,
   } = useWorkPlan();
 
   const [inspectDate, setInspectDate] = useState<string | null>(null);
@@ -127,8 +130,8 @@ export const MonthlyCalendarView: React.FC = () => {
   const completionPercentage =
     totalPlannedTasks > 0 ? Math.round((completedTasks / totalPlannedTasks) * 100) : 0;
 
-  const inspectedDayTasks = inspectDate ? tasksByDate[inspectDate] || [] : [];
-  const isInspectedDateOff = inspectDate ? isWeeklyOff(inspectDate, settings.weeklyOffDays) : false;
+  const isInspectedDateOff = inspectDate ? isDateOffDay(inspectDate) : false;
+  const inspectedDayTasks = inspectDate && !isInspectedDateOff ? tasksByDate[inspectDate] || [] : [];
 
   const handleConfirmReschedule = (taskId: string) => {
     if (!rescheduleDateInput) return;
@@ -140,50 +143,50 @@ export const MonthlyCalendarView: React.FC = () => {
   return (
     <div className="space-y-5">
       {/* 1. MONTHLY OVERVIEW AT TOP (Requirement 11) */}
-      <div className="bg-white border border-neutral-200 rounded-lg p-4 sm:p-5 shadow-xs space-y-4">
+      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-5 shadow-xs space-y-4">
         {/* Month Title & Nav controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center border border-neutral-200 rounded-md bg-white">
+          <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+            <div className="flex items-center border border-[#E5E7EB] rounded-md bg-white">
               <button
                 onClick={handlePrevMonth}
-                className="p-1.5 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 rounded-l-md transition-colors"
+                className="p-1.5 text-[#4B5563] hover:text-[#111111] hover:bg-neutral-50 rounded-l-md transition-colors cursor-pointer"
                 title="Previous Month"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 onClick={handleGoCurrentMonth}
-                className="px-3 py-1 text-xs font-medium border-x border-neutral-200 text-neutral-700 hover:bg-neutral-50 transition-colors"
+                className="px-3 py-1.5 text-xs font-semibold border-x border-[#E5E7EB] text-[#111111] hover:bg-neutral-50 transition-colors cursor-pointer"
               >
                 Current Month
               </button>
               <button
                 onClick={handleNextMonth}
-                className="p-1.5 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 rounded-r-md transition-colors"
+                className="p-1.5 text-[#4B5563] hover:text-[#111111] hover:bg-neutral-50 rounded-r-md transition-colors cursor-pointer"
                 title="Next Month"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
 
-            <h2 className="text-lg font-bold text-neutral-900 tracking-tight">
+            <h2 className="text-base sm:text-lg font-bold text-[#111111] tracking-tight">
               {MONTH_NAMES[monthIndex]} {year}
             </h2>
           </div>
 
           <div className="flex items-center gap-2">
             {/* Mobile view toggle */}
-            <div className="flex sm:hidden items-center border border-neutral-200 rounded p-0.5 bg-neutral-100">
+            <div className="flex sm:hidden items-center border border-[#E5E7EB] rounded p-0.5 bg-neutral-100">
               <button
                 onClick={() => setMobileViewMode('grid')}
-                className={`p-1 rounded ${mobileViewMode === 'grid' ? 'bg-white text-neutral-900 shadow-xs' : 'text-neutral-500'}`}
+                className={`p-1 rounded cursor-pointer ${mobileViewMode === 'grid' ? 'bg-white text-[#111111] shadow-xs' : 'text-[#4B5563]'}`}
               >
                 <Grid className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setMobileViewMode('agenda')}
-                className={`p-1 rounded ${mobileViewMode === 'agenda' ? 'bg-white text-neutral-900 shadow-xs' : 'text-neutral-500'}`}
+                className={`p-1 rounded cursor-pointer ${mobileViewMode === 'agenda' ? 'bg-white text-[#111111] shadow-xs' : 'text-[#4B5563]'}`}
               >
                 <List className="w-3.5 h-3.5" />
               </button>
@@ -191,54 +194,54 @@ export const MonthlyCalendarView: React.FC = () => {
 
             <button
               onClick={openMonthlySetup}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-neutral-900 bg-neutral-100 hover:bg-neutral-200 border border-neutral-300 rounded-md transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#111111] bg-white hover:bg-neutral-50 border border-[#E5E7EB] rounded-md transition-colors cursor-pointer shadow-2xs"
             >
-              <CalendarDays className="w-3.5 h-3.5 text-neutral-700" />
+              <CalendarDays className="w-3.5 h-3.5 text-[#E50914]" />
               <span>Monthly Setup</span>
             </button>
           </div>
         </div>
 
         {/* Overview Stats Bar: Month Name, Planned, Working Days, Off Days, Completed, Pending, % */}
-        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 sm:gap-4 pt-3 border-t border-neutral-100 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 sm:gap-4 pt-3 border-t border-[#E5E7EB] text-xs">
           <div>
-            <span className="text-[11px] text-neutral-500 font-medium">Planned Tasks</span>
-            <div className="text-base font-bold font-mono text-neutral-900 tabular-nums">
+            <span className="text-[11px] text-[#4B5563] font-medium">Planned Tasks</span>
+            <div className="text-base font-bold font-mono text-[#111111] tabular-nums">
               {totalPlannedTasks}
             </div>
           </div>
 
           <div>
-            <span className="text-[11px] text-neutral-500 font-medium">Working Days</span>
-            <div className="text-base font-bold font-mono text-neutral-800 tabular-nums">
+            <span className="text-[11px] text-[#4B5563] font-medium">Working Days</span>
+            <div className="text-base font-bold font-mono text-[#111111] tabular-nums">
               {monthDayCounts.workingDaysCount}
             </div>
           </div>
 
           <div>
-            <span className="text-[11px] text-neutral-500 font-medium">Off Days</span>
+            <span className="text-[11px] text-[#4B5563] font-medium">Off Days</span>
             <div className="text-base font-bold font-mono text-amber-700 tabular-nums">
               {monthDayCounts.offDaysCount}
             </div>
           </div>
 
           <div>
-            <span className="text-[11px] text-neutral-500 font-medium">Completed</span>
+            <span className="text-[11px] text-[#4B5563] font-medium">Completed</span>
             <div className="text-base font-bold font-mono text-emerald-700 tabular-nums">
               {completedTasks}
             </div>
           </div>
 
           <div>
-            <span className="text-[11px] text-neutral-500 font-medium">Pending</span>
-            <div className="text-base font-bold font-mono text-neutral-700 tabular-nums">
+            <span className="text-[11px] text-[#4B5563] font-medium">Pending</span>
+            <div className="text-base font-bold font-mono text-[#4B5563] tabular-nums">
               {pendingTasks}
             </div>
           </div>
 
           <div>
-            <span className="text-[11px] text-neutral-500 font-medium">Completion %</span>
-            <div className="text-base font-bold font-mono text-neutral-900 tabular-nums">
+            <span className="text-[11px] text-[#4B5563] font-medium">Completion %</span>
+            <div className="text-base font-bold font-mono text-[#111111] tabular-nums">
               {completionPercentage}%
             </div>
           </div>
@@ -246,17 +249,17 @@ export const MonthlyCalendarView: React.FC = () => {
 
         {/* Month notes banner if exists */}
         {settings.monthlyNotes?.[currentMonth] && (
-          <div className="bg-neutral-50 border border-neutral-200 rounded p-2.5 text-xs text-neutral-700 flex items-start gap-2">
-            <span className="font-semibold text-neutral-900 shrink-0">Month Focus:</span>
+          <div className="bg-neutral-50 border border-[#E5E7EB] rounded-lg p-2.5 text-xs text-[#4B5563] flex items-start gap-2">
+            <span className="font-semibold text-[#111111] shrink-0">Month Focus:</span>
             <span>{settings.monthlyNotes[currentMonth]}</span>
           </div>
         )}
       </div>
 
       {/* 2. CALENDAR GRID (Requirement 3 & 4) */}
-      <div className={`bg-white border border-neutral-200 rounded-lg overflow-hidden shadow-xs ${mobileViewMode === 'agenda' ? 'hidden sm:block' : 'block'}`}>
+      <div className={`bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-xs ${mobileViewMode === 'agenda' ? 'hidden sm:block' : 'block'}`}>
         {/* Days of week header */}
-        <div className="grid grid-cols-7 border-b border-neutral-200 bg-neutral-50/70 text-center text-xs font-semibold text-neutral-600">
+        <div className="grid grid-cols-7 border-b border-[#E5E7EB] bg-neutral-50/70 text-center text-xs font-semibold text-[#4B5563]">
           {DAY_NAMES_SHORT.map((dayName, idx) => {
             const isOff = settings.weeklyOffDays.includes(idx);
             return (
@@ -274,14 +277,14 @@ export const MonthlyCalendarView: React.FC = () => {
         </div>
 
         {/* 7-column calendar matrix */}
-        <div className="grid grid-cols-7 divide-x divide-y divide-neutral-200">
+        <div className="grid grid-cols-7 divide-x divide-y divide-[#E5E7EB]">
           {calendarCells.map(cell => {
-            const isOff = isWeeklyOff(cell.dateISO, settings.weeklyOffDays);
+            const isOff = isDateOffDay(cell.dateISO);
             const isToday = cell.dateISO === todayISO;
-            const dayTaskList = tasksByDate[cell.dateISO] || [];
+            const dayTaskList = isOff ? [] : (tasksByDate[cell.dateISO] || []);
             const dayTotal = dayTaskList.length;
             const dayCompleted = dayTaskList.filter(t => t.status === 'completed').length;
-            const hasImportant = dayTaskList.some(t => t.isImportant);
+            const hasImportant = isOff ? false : dayTaskList.some(t => t.isImportant);
 
             return (
               <div
@@ -291,9 +294,9 @@ export const MonthlyCalendarView: React.FC = () => {
                   !cell.isCurrentMonth
                     ? 'bg-neutral-50/60 text-neutral-400'
                     : isOff
-                    ? 'bg-amber-50/20 hover:bg-amber-50/40'
+                    ? 'bg-amber-50/20 hover:bg-amber-50/40 border-amber-200'
                     : 'bg-white hover:bg-neutral-50/80'
-                } ${isToday ? 'ring-2 ring-inset ring-neutral-900 z-10' : ''}`}
+                } ${isToday ? 'ring-2 ring-inset ring-[#E50914] z-10' : ''}`}
               >
                 {/* Day Header inside cell */}
                 <div className="flex items-center justify-between">
@@ -301,17 +304,19 @@ export const MonthlyCalendarView: React.FC = () => {
                     <span
                       className={`text-xs font-mono font-medium rounded-full w-5 h-5 flex items-center justify-center ${
                         isToday
-                          ? 'bg-neutral-900 text-white font-bold'
+                          ? 'bg-[#E50914] text-white font-bold shadow-2xs'
                           : cell.isCurrentMonth
-                          ? 'text-neutral-900'
-                          : 'text-neutral-400'
+                          ? 'text-[#111111]'
+                          : 'text-[#4B5563]/50'
                       }`}
                     >
                       {cell.dayNumber}
                     </span>
 
                     {isOff && cell.isCurrentMonth && (
-                      <span className="text-[9px] font-medium text-amber-700">Off</span>
+                      <span className="text-[9px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-1 py-0.2 rounded uppercase">
+                        OFF DAY
+                      </span>
                     )}
 
                     {hasImportant && (
@@ -333,9 +338,17 @@ export const MonthlyCalendarView: React.FC = () => {
                   )}
                 </div>
 
-                {/* COMPACT TASK DISPLAY (Requirement 4) */}
-                <div className="mt-1 space-y-1 flex-1 overflow-hidden">
-                  {dayTaskList.slice(0, 3).map(task => {
+                {/* COMPACT TASK DISPLAY OR OFF DAY CARD */}
+                {isOff && cell.isCurrentMonth ? (
+                  <div className="mt-2 flex-1 flex flex-col items-center justify-center text-center p-1 rounded bg-amber-50/40 border border-amber-200/50">
+                    <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider">
+                      OFF DAY
+                    </span>
+                    <span className="text-[9px] text-amber-800 font-mono mt-0.5">0 tasks</span>
+                  </div>
+                ) : (
+                  <div className="mt-1 space-y-1 flex-1 overflow-hidden">
+                    {dayTaskList.slice(0, 3).map(task => {
                     const isDone = task.status === 'completed';
                     // Minimal indicator for type
                     const typeIcon =
@@ -375,6 +388,7 @@ export const MonthlyCalendarView: React.FC = () => {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Progress bar at bottom of cell */}
                 {dayTotal > 0 && (
@@ -396,25 +410,29 @@ export const MonthlyCalendarView: React.FC = () => {
         {calendarCells
           .filter(c => c.isCurrentMonth)
           .map(cell => {
-            const isOff = isWeeklyOff(cell.dateISO, settings.weeklyOffDays);
+            const isOff = isDateOffDay(cell.dateISO);
             const isToday = cell.dateISO === todayISO;
-            const dayTaskList = tasksByDate[cell.dateISO] || [];
+            const dayTaskList = isOff ? [] : (tasksByDate[cell.dateISO] || []);
 
             return (
               <div
                 key={cell.dateISO}
                 onClick={() => setInspectDate(cell.dateISO)}
                 className={`bg-white border rounded-lg p-3 text-xs ${
-                  isToday ? 'border-neutral-900 ring-1 ring-neutral-900' : 'border-neutral-200'
+                  isToday ? 'border-[#E50914] ring-1 ring-[#E50914]' : isOff ? 'border-amber-200 bg-amber-50/20' : 'border-neutral-200'
                 }`}
               >
                 <div className="flex items-center justify-between pb-1.5 border-b border-neutral-100">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-neutral-900">{cell.dateISO}</span>
-                    {isOff && <span className="text-[10px] text-amber-700">Weekly Off</span>}
+                    {isOff && (
+                      <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-1.5 py-0.2 rounded uppercase">
+                        OFF DAY
+                      </span>
+                    )}
                   </div>
                   <span className="font-mono text-[11px] text-neutral-500">
-                    {dayTaskList.length} tasks
+                    {isOff ? '0 tasks (Off Day)' : `${dayTaskList.length} tasks`}
                   </span>
                 </div>
 
@@ -441,17 +459,20 @@ export const MonthlyCalendarView: React.FC = () => {
 
       {/* 3. DAY DETAIL PANEL & DIRECT ACTIONS (Requirement 3, 5, 6) */}
       {inspectDate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/40 backdrop-blur-xs">
-          <div className="relative w-full max-w-lg bg-white rounded-lg shadow-xl border border-neutral-200 overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-neutral-950/40 backdrop-blur-xs overflow-y-auto">
+          <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-xl shadow-2xl border border-[#E5E7EB] flex flex-col max-h-[92vh] sm:max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200 bg-neutral-50/50">
+            <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[#E5E7EB] bg-white shrink-0">
               <div>
-                <h3 className="text-sm font-bold text-neutral-900">
-                  {formatDisplayDate(inspectDate)}
-                </h3>
-                <div className="flex items-center gap-2 text-xs text-neutral-500 mt-0.5">
-                  <span className={isInspectedDateOff ? 'text-amber-800 font-semibold' : 'text-neutral-700'}>
-                    {isInspectedDateOff ? 'Weekly Off Day' : 'Working Day'}
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#E50914] shrink-0" />
+                  <h3 className="text-sm sm:text-base font-bold text-[#111111]">
+                    {formatDisplayDate(inspectDate)}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-[#4B5563] mt-0.5">
+                  <span className={isInspectedDateOff ? 'text-amber-900 font-bold bg-amber-100 border border-amber-300 px-1.5 py-0.2 rounded uppercase text-[10px]' : 'text-[#111111]'}>
+                    {isInspectedDateOff ? 'OFF DAY' : 'Working Day'}
                   </span>
                   <span>·</span>
                   <span>{inspectedDayTasks.length} Scheduled Tasks</span>
@@ -459,20 +480,23 @@ export const MonthlyCalendarView: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    openCreateTask(inspectDate);
-                    setInspectDate(null);
-                  }}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-neutral-900 hover:bg-neutral-800 rounded shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Task</span>
-                </button>
+                {!isInspectedDateOff && (
+                  <button
+                    onClick={() => {
+                      openCreateTask(inspectDate);
+                      setInspectDate(null);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#E50914] hover:bg-[#c80812] active:scale-[0.98] rounded-md shadow-xs shadow-[#E50914]/20 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Task</span>
+                  </button>
+                )}
 
                 <button
                   onClick={() => setInspectDate(null)}
-                  className="p-1 text-neutral-400 hover:text-neutral-700 rounded-md"
+                  className="p-1.5 text-[#4B5563] hover:text-[#111111] hover:bg-neutral-100 rounded-md transition-colors"
+                  aria-label="Close"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -481,7 +505,35 @@ export const MonthlyCalendarView: React.FC = () => {
 
             {/* Task list for selected date */}
             <div className="p-5 max-h-[60vh] overflow-y-auto space-y-2.5">
-              {inspectedDayTasks.length === 0 ? (
+              {isInspectedDateOff ? (
+                <div className="text-center py-8 space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center mx-auto border border-amber-200 shadow-2xs">
+                    <Coffee className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full inline-block">
+                      OFF DAY
+                    </span>
+                    <p className="text-sm font-bold text-[#111111] mt-1.5">
+                      No tasks scheduled — this is an off day.
+                    </p>
+                    <p className="text-xs text-[#4B5563] max-w-xs mx-auto">
+                      Tasks cannot be scheduled on this date. All routines and tasks automatically skip off days.
+                    </p>
+                  </div>
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        const nextWorking = getNextWorkingDayDate(inspectDate);
+                        setInspectDate(nextWorking);
+                      }}
+                      className="text-xs font-semibold text-[#111111] hover:text-[#E50914] underline cursor-pointer"
+                    >
+                      View Next Working Day ({getNextWorkingDayDate(inspectDate)})
+                    </button>
+                  </div>
+                </div>
+              ) : inspectedDayTasks.length === 0 ? (
                 <div className="text-center py-8 space-y-2">
                   <Clock className="w-6 h-6 text-neutral-400 mx-auto" />
                   <p className="text-xs text-neutral-600">
@@ -687,14 +739,14 @@ export const MonthlyCalendarView: React.FC = () => {
             </div>
 
             {/* Panel Footer */}
-            <div className="flex items-center justify-between px-5 py-3 border-t border-neutral-200 bg-neutral-50/50">
+            <div className="flex items-center justify-between px-5 py-3 border-t border-[#E5E7EB] bg-white shrink-0">
               <button
                 onClick={() => {
                   setSelectedDate(inspectDate);
                   setPlannerSubTab('daily');
                   setInspectDate(null);
                 }}
-                className="text-xs font-semibold text-neutral-800 hover:text-neutral-950 inline-flex items-center gap-1 group"
+                className="text-xs font-semibold text-[#E50914] hover:text-[#c80812] inline-flex items-center gap-1 group cursor-pointer"
               >
                 <span>Open in Daily Schedule</span>
                 <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
@@ -702,7 +754,7 @@ export const MonthlyCalendarView: React.FC = () => {
 
               <button
                 onClick={() => setInspectDate(null)}
-                className="px-3 py-1 text-xs font-medium text-neutral-600 hover:text-neutral-900"
+                className="px-3 py-1.5 text-xs font-medium text-[#4B5563] hover:text-[#111111] hover:bg-neutral-100 rounded-md transition-colors"
               >
                 Close
               </button>

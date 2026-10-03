@@ -15,25 +15,25 @@ export const ReportsView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Sub-navigation Segmented Control */}
-      <div className="flex items-center justify-between border-b border-neutral-200 pb-4 no-print">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E5E7EB] pb-4 no-print">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-neutral-900">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#111111]">
             Self-Reporting & Reflections
           </h1>
-          <p className="text-xs text-neutral-500 mt-0.5">
+          <p className="text-xs text-[#4B5563] mt-0.5">
             Audit your accomplishments, analyze routine delivery, and record qualitative reflections
           </p>
         </div>
 
-        <div className="flex items-center gap-1 p-1 bg-neutral-100 rounded-lg border border-neutral-200">
+        <div className="flex items-center gap-1 p-1 bg-neutral-100 rounded-lg border border-[#E5E7EB] self-start sm:self-auto">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setReportsSubTab(tab.id)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer whitespace-nowrap active:scale-[0.98] ${
                 reportsSubTab === tab.id
-                  ? 'bg-white text-neutral-900 font-semibold shadow-xs'
-                  : 'text-neutral-600 hover:text-neutral-900'
+                  ? 'bg-white text-[#E50914] font-bold shadow-xs border border-[#E5E7EB]'
+                  : 'text-[#4B5563] hover:text-[#111111]'
               }`}
             >
               {tab.label}
@@ -42,8 +42,10 @@ export const ReportsView: React.FC = () => {
         </div>
       </div>
 
-      {reportsSubTab === 'weekly' && <WeeklyReportView />}
-      {reportsSubTab === 'monthly' && <MonthlyReportView />}
+      <div key={reportsSubTab} className="animate-liquid-page">
+        {reportsSubTab === 'weekly' && <WeeklyReportView />}
+        {reportsSubTab === 'monthly' && <MonthlyReportView />}
+      </div>
     </div>
   );
 };

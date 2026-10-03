@@ -23,10 +23,13 @@ const AppContent: React.FC = () => {
   const { activeNavTab } = useWorkPlan();
 
   return (
-    <div className="min-h-screen bg-white flex flex-col text-neutral-900 font-sans">
+    <div className="min-h-screen bg-[#F3F4F6] flex flex-col text-[#111111] font-sans antialiased overflow-x-hidden selection:bg-[#E50914]/15 selection:text-[#E50914]">
       <Navbar />
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <main
+        key={activeNavTab}
+        className="flex-1 max-w-6xl w-full mx-auto px-3.5 sm:px-6 py-5 sm:py-8 animate-liquid-page"
+      >
         {activeNavTab === 'dashboard' && <DashboardView />}
         {activeNavTab === 'today' && <DailyScheduleView />}
         {(activeNavTab === 'calendar' || activeNavTab === 'planner') && <PlannerView />}
@@ -36,15 +39,23 @@ const AppContent: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-neutral-100 bg-white py-4 no-print mt-auto">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-neutral-400">
+      <footer className="border-t border-[#E5E7EB] bg-white py-4 no-print mt-auto mb-16 md:mb-0 transition-colors">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-[#4B5563]">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-neutral-700">Self Reporting</span>
+            <span className="font-semibold text-[#111111]">Self Reporting</span>
             <span>·</span>
             <span>Personal Work Operating System</span>
           </div>
-          <div>
-            <span>Plan · Schedule · Execute · Complete · Report · Reflect</span>
+          <div className="flex items-center gap-1.5 text-[11px] text-[#4B5563]">
+            <span>Plan</span>
+            <span>·</span>
+            <span>Schedule</span>
+            <span>·</span>
+            <span>Execute</span>
+            <span>·</span>
+            <span>Report</span>
+            <span>·</span>
+            <span>Reflect</span>
           </div>
         </div>
       </footer>

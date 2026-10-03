@@ -161,19 +161,19 @@ export const TasksView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-200 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E5E7EB] pb-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-neutral-900">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#111111]">
             Task Repository & Execution Ledger
           </h1>
-          <p className="text-xs text-neutral-500 mt-0.5">
+          <p className="text-xs text-[#4B5563] mt-0.5">
             Complete list of all planned, in-progress, completed, and rescheduled tasks
           </p>
         </div>
 
         <button
           onClick={() => openCreateTask()}
-          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-neutral-900 hover:bg-neutral-800 rounded-md transition-colors shadow-xs"
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-[#E50914] hover:bg-[#c80812] active:scale-[0.98] rounded-md transition-all shadow-xs shadow-[#E50914]/20 cursor-pointer self-start sm:self-auto"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>New Task</span>
@@ -181,17 +181,17 @@ export const TasksView: React.FC = () => {
       </div>
 
       {/* Filter and Search Bar (Requirement 20) */}
-      <div className="bg-white border border-neutral-200 rounded-lg p-4 space-y-3 shadow-xs">
+      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 space-y-3 shadow-xs">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2.5">
           {/* Search box */}
           <div className="sm:col-span-2 relative">
-            <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-2.5" />
+            <Search className="w-4 h-4 text-[#4B5563] absolute left-3 top-2.5" />
             <input
               type="text"
               placeholder="Search by title, notes, contacts..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs border border-neutral-300 rounded-md bg-white focus:outline-hidden focus:ring-1 focus:ring-neutral-900"
+              className="w-full pl-9 pr-3 py-1.5 text-xs border border-[#E5E7EB] rounded-md bg-white text-[#111111] placeholder:text-[#4B5563]/60 focus:outline-hidden focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]"
             />
           </div>
 
@@ -200,7 +200,7 @@ export const TasksView: React.FC = () => {
             <select
               value={filterType}
               onChange={e => setFilterType(e.target.value)}
-              className="w-full px-2 py-1.5 text-xs border border-neutral-300 rounded-md bg-white focus:ring-1 focus:ring-neutral-900"
+              className="w-full px-2 py-1.5 text-xs border border-[#E5E7EB] rounded-md bg-white text-[#111111] focus:outline-hidden focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]"
             >
               <option value="all">All Types</option>
               <option value="recurring">Recurring</option>
@@ -216,7 +216,7 @@ export const TasksView: React.FC = () => {
             <select
               value={filterStatus}
               onChange={e => setFilterStatus(e.target.value)}
-              className="w-full px-2 py-1.5 text-xs border border-neutral-300 rounded-md bg-white focus:ring-1 focus:ring-neutral-900"
+              className="w-full px-2 py-1.5 text-xs border border-[#E5E7EB] rounded-md bg-white text-[#111111] focus:outline-hidden focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]"
             >
               <option value="all">All Statuses</option>
               <option value="planned">Planned</option>
@@ -233,7 +233,7 @@ export const TasksView: React.FC = () => {
             <select
               value={filterPriority}
               onChange={e => setFilterPriority(e.target.value)}
-              className="w-full px-2 py-1.5 text-xs border border-neutral-300 rounded-md bg-white focus:ring-1 focus:ring-neutral-900"
+              className="w-full px-2 py-1.5 text-xs border border-[#E5E7EB] rounded-md bg-white text-[#111111] focus:outline-hidden focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]"
             >
               <option value="all">All Priorities</option>
               <option value="critical">Critical</option>
@@ -248,7 +248,7 @@ export const TasksView: React.FC = () => {
             <select
               value={filterDateRange}
               onChange={e => setFilterDateRange(e.target.value)}
-              className="w-full px-2 py-1.5 text-xs border border-neutral-300 rounded-md bg-white focus:ring-1 focus:ring-neutral-900"
+              className="w-full px-2 py-1.5 text-xs border border-[#E5E7EB] rounded-md bg-white text-[#111111] focus:outline-hidden focus:border-[#E50914] focus:ring-1 focus:ring-[#E50914]"
             >
               <option value="all">All Dates</option>
               <option value="today">Today</option>
@@ -262,29 +262,29 @@ export const TasksView: React.FC = () => {
         {/* If Custom Date Selected */}
         {filterDateRange === 'custom' && (
           <div className="flex items-center gap-2 pt-1 text-xs">
-            <span className="text-neutral-600 font-medium">Select Date:</span>
+            <span className="text-[#4B5563] font-medium">Select Date:</span>
             <input
               type="date"
               value={customDate}
               onChange={e => setCustomDate(e.target.value)}
-              className="px-2 py-1 text-xs border border-neutral-300 rounded font-mono bg-white"
+              className="px-2 py-1 text-xs border border-[#E5E7EB] rounded font-mono bg-white text-[#111111]"
             />
           </div>
         )}
 
         {/* Sorting and Count */}
-        <div className="flex items-center justify-between text-xs text-neutral-500 pt-2 border-t border-neutral-100 flex-wrap gap-2">
+        <div className="flex items-center justify-between text-xs text-[#4B5563] pt-2 border-t border-[#E5E7EB] flex-wrap gap-2">
           <div>
-            Showing <span className="font-mono font-semibold text-neutral-900 tabular-nums">{filteredTasks.length}</span> of{' '}
+            Showing <span className="font-mono font-semibold text-[#111111] tabular-nums">{filteredTasks.length}</span> of{' '}
             <span className="font-mono tabular-nums">{tasks.length}</span> total tasks
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-neutral-500">Sort by:</span>
+            <span className="text-[#4B5563]">Sort by:</span>
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value as SortOption)}
-              className="px-2 py-1 text-xs border border-neutral-300 rounded bg-white text-neutral-800 font-medium"
+              className="px-2 py-1 text-xs border border-[#E5E7EB] rounded bg-white text-[#111111] font-medium"
             >
               <option value="date_asc">Date (Earliest first)</option>
               <option value="date_desc">Date (Latest first)</option>
@@ -296,11 +296,217 @@ export const TasksView: React.FC = () => {
         </div>
       </div>
 
-      {/* High-density Data Table */}
-      <div className="bg-white border border-neutral-200 rounded-lg overflow-hidden shadow-xs">
+      {/* MOBILE CARD VIEW (< sm) */}
+      <div className="sm:hidden space-y-3">
+        {filteredTasks.length === 0 ? (
+          <div className="bg-white border border-[#E5E7EB] rounded-xl p-8 text-center text-xs text-[#4B5563]/60 italic">
+            No tasks match the selected criteria.
+          </div>
+        ) : (
+          filteredTasks.map(t => {
+            const isDone = t.status === 'completed';
+            const isInProgress = t.status === 'in_progress';
+            const isSkipped = t.status === 'skipped';
+            const isOverdue = isTaskOverdue(t.date, t.startTime, t.status);
+
+            return (
+              <div
+                key={t.id}
+                className={`bg-white border rounded-xl p-4 space-y-3 transition-all shadow-xs ${
+                  isInProgress
+                    ? 'border-[#E50914] ring-1 ring-[#E50914] bg-[#E50914]/5'
+                    : isDone
+                    ? 'border-[#E5E7EB] bg-neutral-50/40 text-[#4B5563]'
+                    : isSkipped
+                    ? 'border-[#E5E7EB] bg-neutral-50/50 opacity-75'
+                    : 'border-[#E5E7EB]'
+                }`}
+              >
+                <div className="flex items-start gap-2.5">
+                  <button
+                    onClick={() => toggleTaskStatus(t.id)}
+                    className="mt-0.5 text-[#4B5563] hover:text-[#E50914] shrink-0 cursor-pointer"
+                  >
+                    {isDone ? (
+                      <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />
+                    ) : (
+                      <Circle className="w-4.5 h-4.5 hover:stroke-[#E50914]" />
+                    )}
+                  </button>
+
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className={`text-sm font-semibold break-words ${
+                        isDone ? 'line-through text-neutral-400' : 'text-[#111111]'
+                      }`}
+                    >
+                      {t.title}
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] text-[#4B5563]">
+                      <span className="font-mono font-medium text-[#111111]">{t.date}</span>
+                      <span>·</span>
+                      <span>{t.startTime ? `${t.startTime} (${t.durationMinutes}m)` : 'Anytime'}</span>
+                      <span>·</span>
+                      <span className="capitalize">{t.type.replace('_', ' ')}</span>
+                      <span>·</span>
+                      <span className="capitalize font-semibold text-[#111111]">{t.priority}</span>
+                    </div>
+
+                    {isInProgress && (
+                      <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-[#E50914] bg-[#E50914]/10 border border-[#E50914]/20 px-1.5 py-0.2 rounded">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#E50914] animate-pulse" />
+                        ACTIVE
+                      </span>
+                    )}
+
+                    {isOverdue && (
+                      <span className="mt-1 inline-block text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded">
+                        Overdue
+                      </span>
+                    )}
+
+                    {t.contactName && (
+                      <div className="text-[11px] text-amber-800 font-medium mt-1">
+                        Contact: {t.contactName}
+                      </div>
+                    )}
+                    {t.meetingWith && (
+                      <div className="text-[11px] text-blue-800 font-medium mt-1">
+                        Meeting: {t.meetingWith}
+                      </div>
+                    )}
+                    {t.notes && (
+                      <div className="text-[11px] text-[#4B5563] mt-1 break-words">
+                        {t.notes}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions Row */}
+                <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-between flex-wrap gap-1.5">
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {t.type === 'meeting' && !isDone && (
+                      <button
+                        onClick={() => openMeetingModal(t)}
+                        className="text-[11px] font-semibold text-white bg-blue-700 hover:bg-blue-800 px-2 py-1 rounded shadow-xs cursor-pointer"
+                      >
+                        Conclude
+                      </button>
+                    )}
+                    {t.type === 'follow_up' && !isDone && (
+                      <button
+                        onClick={() => openFollowUpModal(t)}
+                        className="text-[11px] font-semibold text-white bg-amber-700 hover:bg-amber-800 px-2 py-1 rounded shadow-xs cursor-pointer"
+                      >
+                        Follow-up
+                      </button>
+                    )}
+                    {!isDone && !isInProgress && !isSkipped && (
+                      <button
+                        onClick={() => startTask(t.id)}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#111111] bg-neutral-100 hover:bg-neutral-200 border border-[#E5E7EB] px-2 py-1 rounded cursor-pointer"
+                      >
+                        <Play className="w-3 h-3 fill-[#111111]" />
+                        <span>Start</span>
+                      </button>
+                    )}
+                    {!isDone && !isSkipped && (
+                      <button
+                        onClick={() => skipTask(t.id)}
+                        className="text-[11px] text-[#4B5563] hover:text-[#111111] border border-[#E5E7EB] px-2 py-1 rounded hover:bg-neutral-50 cursor-pointer"
+                      >
+                        Skip
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        setReschedulingTaskId(reschedulingTaskId === t.id ? null : t.id);
+                        setRescheduleDateInput(t.date);
+                        setRescheduleTimeInput(t.startTime || '09:00');
+                      }}
+                      className="p-1.5 text-[#4B5563] hover:text-[#111111] border border-[#E5E7EB] rounded hover:bg-neutral-50 cursor-pointer"
+                      title="Reschedule"
+                    >
+                      <Calendar className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => openEditTask(t)}
+                      className="p-1.5 text-[#4B5563] hover:text-[#111111] border border-[#E5E7EB] rounded hover:bg-neutral-50 cursor-pointer"
+                      title="Edit"
+                    >
+                      <FileEdit className="w-3.5 h-3.5" />
+                    </button>
+                    {confirmDeleteTaskId === t.id ? (
+                      <div className="inline-flex items-center gap-1 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded text-[11px]">
+                        <span className="text-rose-700 font-semibold">Delete?</span>
+                        <button
+                          onClick={() => {
+                            deleteTask(t.id);
+                            setConfirmDeleteTaskId(null);
+                          }}
+                          className="text-rose-800 font-bold hover:underline px-0.5 cursor-pointer"
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteTaskId(null)}
+                          className="text-neutral-500 hover:text-neutral-800 px-0.5 cursor-pointer"
+                        >
+                          No
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteTaskId(t.id)}
+                        className="p-1.5 text-neutral-400 hover:text-rose-600 rounded cursor-pointer hover:bg-rose-50"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Inline Reschedule row if open */}
+                {reschedulingTaskId === t.id && (
+                  <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-end gap-1.5 flex-wrap">
+                    <span className="text-[11px] text-[#4B5563]">Move to:</span>
+                    <input
+                      type="date"
+                      value={rescheduleDateInput}
+                      onChange={e => setRescheduleDateInput(e.target.value)}
+                      className="px-2 py-1 text-xs border border-[#E5E7EB] rounded font-mono bg-white text-[#111111]"
+                    />
+                    <button
+                      onClick={() => handleConfirmReschedule(t.id)}
+                      className="px-2.5 py-1 text-xs font-semibold text-white bg-[#E50914] hover:bg-[#c80812] rounded cursor-pointer"
+                    >
+                      Move
+                    </button>
+                    <button
+                      onClick={() => setReschedulingTaskId(null)}
+                      className="text-xs text-[#4B5563] hover:text-[#111111] px-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* DESKTOP DATA TABLE (hidden on mobile, visible on sm and up) */}
+      <div className="hidden sm:block bg-white border border-[#E5E7EB] rounded-xl overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-neutral-50/80 border-b border-neutral-200 text-neutral-600 font-semibold uppercase tracking-wider text-[10px]">
+            <thead className="bg-neutral-50/80 border-b border-[#E5E7EB] text-[#4B5563] font-semibold uppercase tracking-wider text-[10px]">
               <tr>
                 <th className="py-2.5 px-3 w-10 text-center">Status</th>
                 <th className="py-2.5 px-3 w-28">Date & Time</th>
@@ -310,10 +516,10 @@ export const TasksView: React.FC = () => {
                 <th className="py-2.5 px-3 w-28 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-200">
+            <tbody className="divide-y divide-[#E5E7EB]">
               {filteredTasks.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-neutral-400 italic">
+                  <td colSpan={6} className="py-8 text-center text-[#4B5563]/60 italic">
                     No tasks match the selected criteria.
                   </td>
                 </tr>
@@ -372,7 +578,7 @@ export const TasksView: React.FC = () => {
                           </span>
 
                           {isInProgress && (
-                            <span className="text-[9px] font-bold text-neutral-900 bg-neutral-100 border border-neutral-900 px-1 rounded">
+                            <span className="text-[9px] font-bold text-[#E50914] bg-[#E50914]/10 border border-[#E50914]/20 px-1.5 py-0.2 rounded">
                               ACTIVE
                             </span>
                           )}

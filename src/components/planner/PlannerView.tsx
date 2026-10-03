@@ -17,26 +17,26 @@ export const PlannerView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Sub-navigation Segmented Control */}
-      <div className="flex items-center justify-between border-b border-neutral-200 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E5E7EB] pb-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-neutral-900">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#111111]">
             Work Planner
           </h1>
-          <p className="text-xs text-neutral-500 mt-0.5">
-            Plan, schedule, and execute your personal workflow
+          <p className="text-xs text-[#4B5563] mt-0.5">
+            Plan, schedule, and execute your personal cadence
           </p>
         </div>
 
         {/* Segmented sub-navigation */}
-        <div className="flex items-center gap-1 p-1 bg-neutral-100 rounded-lg border border-neutral-200">
+        <div className="flex items-center gap-1 p-1 bg-neutral-100 rounded-lg border border-[#E5E7EB] self-start sm:self-auto overflow-x-auto max-w-full">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setPlannerSubTab(tab.id)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer whitespace-nowrap active:scale-[0.98] ${
                 plannerSubTab === tab.id
-                  ? 'bg-white text-neutral-900 font-semibold shadow-xs'
-                  : 'text-neutral-600 hover:text-neutral-900'
+                  ? 'bg-white text-[#E50914] font-bold shadow-xs border border-[#E5E7EB]'
+                  : 'text-[#4B5563] hover:text-[#111111]'
               }`}
             >
               {tab.label}
@@ -45,10 +45,12 @@ export const PlannerView: React.FC = () => {
         </div>
       </div>
 
-      {/* View Content */}
-      {plannerSubTab === 'daily' && <DailyScheduleView />}
-      {plannerSubTab === 'weekly' && <WeeklyPlannerView />}
-      {plannerSubTab === 'monthly' && <MonthlyCalendarView />}
+      {/* View Content with liquid enter */}
+      <div key={plannerSubTab} className="animate-liquid-page">
+        {plannerSubTab === 'daily' && <DailyScheduleView />}
+        {plannerSubTab === 'weekly' && <WeeklyPlannerView />}
+        {plannerSubTab === 'monthly' && <MonthlyCalendarView />}
+      </div>
     </div>
   );
 };

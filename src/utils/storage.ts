@@ -1,5 +1,6 @@
 import { Task, TaskTemplate, UserSettings, WeeklyReportRecord, MonthlyReportRecord } from '../types';
-import { DEFAULT_SETTINGS, DEFAULT_TEMPLATES, generateInitialTasks, INITIAL_WEEKLY_REPORTS, INITIAL_MONTHLY_REPORTS } from './defaults';
+import { DEFAULT_SETTINGS, DEFAULT_TEMPLATES, generateInitialTasks, generateDayRecurringTasks, INITIAL_WEEKLY_REPORTS, INITIAL_MONTHLY_REPORTS } from './defaults';
+import { getTodayISO, isDateOff } from './dateUtils';
 
 const STORAGE_KEYS = {
   SETTINGS: 'self_reporting_settings_v1',
@@ -25,10 +26,29 @@ export function loadStoredData(): StoredAppState {
     const rawWeekly = localStorage.getItem(STORAGE_KEYS.WEEKLY_REPORTS);
     const rawMonthly = localStorage.getItem(STORAGE_KEYS.MONTHLY_REPORTS);
 
+    const settings: UserSettings = rawSettings ? JSON.parse(rawSettings) : DEFAULT_SETTINGS;
+    const templates: TaskTemplate[] = rawTemplates ? JSON.parse(rawTemplates) : DEFAULT_TEMPLATES;
+    let tasks: Task[] = rawTasks ? JSON.parse(rawTasks) : generateInitialTasks();
+
+    // STRICT CENTRAL RULE: OFF DAY = ZERO TASKS!
+    // Purge any stored tasks that fall on configured off days
+    tasks = tasks.filter(t => !isDateOff(t.date, settings.weeklyOffDays, settings.customOffDates));
+
+    // Ensure working days have recurring tasks generated if empty
+    const todayISO = getTodayISO();
+    const isTodayOff = isDateOff(todayISO, settings.weeklyOffDays, settings.customOffDates);
+    if (!isTodayOff) {
+      const hasTodayTasks = tasks.some(t => t.date === todayISO);
+      if (!hasTodayTasks) {
+        const generatedToday = generateDayRecurringTasks(todayISO, templates, settings);
+        tasks = [...tasks, ...generatedToday];
+      }
+    }
+
     return {
-      settings: rawSettings ? JSON.parse(rawSettings) : DEFAULT_SETTINGS,
-      templates: rawTemplates ? JSON.parse(rawTemplates) : DEFAULT_TEMPLATES,
-      tasks: rawTasks ? JSON.parse(rawTasks) : generateInitialTasks(),
+      settings,
+      templates,
+      tasks,
       weeklyReports: rawWeekly ? JSON.parse(rawWeekly) : INITIAL_WEEKLY_REPORTS,
       monthlyReports: rawMonthly ? JSON.parse(rawMonthly) : INITIAL_MONTHLY_REPORTS,
     };

@@ -186,11 +186,49 @@ export function getCalendarGrid(year: number, monthIndex: number): CalendarCell[
 }
 
 /**
- * Check if a date string is a weekly off day
+ * Check if an ISO date string is configured as an OFF DAY.
+ * Central scheduling rule: IF date.isOffDay === true -> ZERO TASKS.
  */
-export function isWeeklyOff(isoDate: string, weeklyOffDays: number[]): boolean {
+export function isDateOff(
+  isoDate: string,
+  weeklyOffDays: number[] = [5, 6],
+  customOffDates: string[] = []
+): boolean {
+  if (!isoDate) return false;
+  if (customOffDates && customOffDates.includes(isoDate)) {
+    return true;
+  }
   const date = parseISODate(isoDate);
-  return weeklyOffDays.includes(date.getDay());
+  return (weeklyOffDays || []).includes(date.getDay());
+}
+
+/**
+ * Check if a date string is a weekly off day (delegates to isDateOff for complete off day support)
+ */
+export function isWeeklyOff(
+  isoDate: string,
+  weeklyOffDays: number[] = [5, 6],
+  customOffDates: string[] = []
+): boolean {
+  return isDateOff(isoDate, weeklyOffDays, customOffDates);
+}
+
+/**
+ * Find the next working day starting from a given date.
+ * If the given date is an off day, advances day-by-day until a non-off working day is found.
+ */
+export function getNextWorkingDay(
+  startDateISO: string,
+  weeklyOffDays: number[] = [5, 6],
+  customOffDates: string[] = []
+): string {
+  const d = parseISODate(startDateISO);
+  let currentISO = formatISODate(d);
+  while (isDateOff(currentISO, weeklyOffDays, customOffDates)) {
+    d.setDate(d.getDate() + 1);
+    currentISO = formatISODate(d);
+  }
+  return currentISO;
 }
 
 /**
@@ -199,15 +237,17 @@ export function isWeeklyOff(isoDate: string, weeklyOffDays: number[]): boolean {
 export function getMonthWorkingAndOffDays(
   year: number,
   monthIndex: number,
-  weeklyOffDays: number[]
+  weeklyOffDays: number[] = [5, 6],
+  customOffDates: string[] = []
 ): { totalDays: number; workingDaysCount: number; offDaysCount: number } {
   const lastDay = new Date(year, monthIndex + 1, 0).getDate();
   let workingDaysCount = 0;
   let offDaysCount = 0;
 
   for (let d = 1; d <= lastDay; d++) {
-    const dayOfWeek = new Date(year, monthIndex, d).getDay();
-    if (weeklyOffDays.includes(dayOfWeek)) {
+    const dateObj = new Date(year, monthIndex, d);
+    const dateISO = formatISODate(dateObj);
+    if (isDateOff(dateISO, weeklyOffDays, customOffDates)) {
       offDaysCount++;
     } else {
       workingDaysCount++;
