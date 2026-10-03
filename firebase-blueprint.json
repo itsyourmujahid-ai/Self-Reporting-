@@ -1,0 +1,144 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered user profile and identity metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "string" },
+        "lastActivityAt": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "suspended"] }
+      },
+      "required": ["id", "email", "role", "createdAt"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Authorized Super Admin identity record",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "User scheduled or planned task document",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["planned", "in_progress", "completed", "skipped", "rescheduled", "overdue"] },
+        "priority": { "type": "string", "enum": ["critical", "high", "medium", "low", "urgent"] },
+        "type": { "type": "string", "enum": ["recurring", "one_time", "follow_up", "meeting", "custom"] },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "durationMinutes": { "type": "number" },
+        "category": { "type": "string" },
+        "project": { "type": "string" },
+        "notes": { "type": "string" },
+        "recurrenceTag": { "type": "string" },
+        "templateId": { "type": "string" },
+        "actualMinutes": { "type": "number" },
+        "completedAt": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "title", "date", "status", "priority", "type", "durationMinutes", "createdAt"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User workspace configuration, off days, and schedules",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "weeklyOffDays": { "type": "array" },
+        "workingDays": { "type": "array" },
+        "workDayStart": { "type": "string" },
+        "workDayEnd": { "type": "string" },
+        "defaultTaskDuration": { "type": "number" },
+        "defaultPriority": { "type": "string" },
+        "categories": { "type": "array" },
+        "projects": { "type": "array" },
+        "configuredMonths": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "weeklyOffDays", "workingDays"]
+    },
+    "TaskTemplate": {
+      "title": "TaskTemplate",
+      "description": "User recurring task template definitions",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "templates": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "templates"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Saved weekly or monthly reflection report",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["weekly", "monthly"] },
+        "periodKey": { "type": "string" },
+        "data": { "type": "object" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "type", "periodKey", "createdAt"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Non-invasive platform activity signal log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "userId", "action", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User account profiles"
+    },
+    "/admins/{adminId}": {
+      "schema": "Admin",
+      "description": "List of authorized Super Admin UIDs"
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "All scheduled and completed task records indexed by userId"
+    },
+    "/settings/{userId}": {
+      "schema": "UserSettings",
+      "description": "User specific work schedule preferences and OFF DAYS"
+    },
+    "/templates/{userId}": {
+      "schema": "TaskTemplate",
+      "description": "User routine task templates"
+    },
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "User accountability reports"
+    },
+    "/activity_logs/{logId}": {
+      "schema": "ActivityLog",
+      "description": "Admin operational audit log entries"
+    }
+  }
+}

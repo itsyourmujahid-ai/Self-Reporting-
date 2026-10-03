@@ -13,18 +13,35 @@ import {
   TaskType,
   WeeklyReflection,
   MonthlyReflection,
+  AuthUser,
 } from '../types';
 import {
   loadStoredData,
-  saveSettings,
-  saveTemplates,
-  saveTasks,
-  saveWeeklyReports,
-  saveMonthlyReports,
+  saveLocalSettings,
+  saveLocalTemplates,
+  saveLocalTasks,
+  saveLocalWeeklyReports,
+  saveLocalMonthlyReports,
   clearAndResetDefaults,
-  importAllData,
+  getStoredToken,
+  setStoredToken,
+  getStoredUser,
+  setStoredUser,
+  clearAuthSession,
   exportAllData,
+  importAllData,
 } from '../utils/storage';
+import { auth, signOut, onAuthStateChanged } from '../firebase';
+import {
+  syncUserProfile,
+  loadUserWorkspace,
+  saveTaskDoc,
+  deleteTaskDoc,
+  batchSaveTasksDocs,
+  saveSettingsDoc,
+  saveTemplatesDoc,
+  saveReportDoc,
+} from '../services/firestoreService';
 import {
   getTodayISO,
   formatISODate,
@@ -36,7 +53,7 @@ import {
   isDateOff,
   getNextWorkingDay,
 } from '../utils/dateUtils';
-import { generateDayRecurringTasks } from '../utils/defaults';
+import { generateDayRecurringTasks, DEFAULT_SETTINGS, DEFAULT_TEMPLATES } from '../utils/defaults';
 
 interface DailyStats {
   total: number;
@@ -169,6 +186,16 @@ interface WorkPlanContextType {
     importantUpcoming: Task[];
   };
 
+  // Authentication state
+  user: AuthUser | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isAdmin: boolean;
+  authLoading: boolean;
+  login: (user: AuthUser, token: string) => void;
+  logout: () => Promise<void>;
+  refreshWorkspace: () => Promise<void>;
+
   // Import / Export
   exportData: () => string;
   importData: (jsonStr: string) => boolean;
@@ -178,7 +205,15 @@ interface WorkPlanContextType {
 const WorkPlanContext = createContext<WorkPlanContextType | null>(null);
 
 export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load initial persistent state
+  // Authentication State
+  const [user, setUser] = useState<AuthUser | null>(() => getStoredUser());
+  const [token, setToken] = useState<string | null>(() => getStoredToken());
+  const [authLoading, setAuthLoading] = useState(true);
+
+  const isAuthenticated = Boolean(user && token);
+  const isAdmin = user?.role === 'admin';
+
+  // Load initial persistent state from local cache
   const [initialData] = useState(() => loadStoredData());
 
   const [settings, setSettingsState] = useState<UserSettings>(initialData.settings);
@@ -208,26 +243,130 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   const [meetingSourceTask, setMeetingSourceTask] = useState<Task | null>(null);
 
-  // Auto-sync state to localStorage
+  // Auto-sync state to local fallback cache
   useEffect(() => {
-    saveSettings(settings);
+    saveLocalSettings(settings);
   }, [settings]);
 
   useEffect(() => {
-    saveTemplates(templates);
+    saveLocalTemplates(templates);
   }, [templates]);
 
   useEffect(() => {
-    saveTasks(tasks);
+    saveLocalTasks(tasks);
   }, [tasks]);
 
   useEffect(() => {
-    saveWeeklyReports(weeklyReports);
+    saveLocalWeeklyReports(weeklyReports);
   }, [weeklyReports]);
 
   useEffect(() => {
-    saveMonthlyReports(monthlyReports);
+    saveLocalMonthlyReports(monthlyReports);
   }, [monthlyReports]);
+
+  // Load user workspace and listen to Firebase persistent auth session
+  useEffect(() => {
+    let isMounted = true;
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const profile = await syncUserProfile(firebaseUser);
+          const authToken = await firebaseUser.getIdToken();
+          const authUser: AuthUser = {
+            id: firebaseUser.uid,
+            email: (firebaseUser.email || '').toLowerCase(),
+            displayName: profile?.displayName || firebaseUser.displayName || 'User',
+            role: profile?.role || 'user',
+          };
+          if (isMounted) {
+            setUser(authUser);
+            setToken(authToken);
+            setStoredToken(authToken);
+            setStoredUser(authUser);
+          }
+
+          const workspace = await loadUserWorkspace(firebaseUser.uid);
+          if (workspace && isMounted) {
+            setSettingsState(workspace.settings);
+            setTemplatesState(workspace.templates);
+            setTasksState(workspace.tasks);
+            setWeeklyReportsState(workspace.weeklyReports);
+            setMonthlyReportsState(workspace.monthlyReports);
+          }
+        } catch (e) {
+          console.warn('Firebase auth initialization error:', e);
+        } finally {
+          if (isMounted) {
+            setAuthLoading(false);
+          }
+        }
+      } else {
+        if (isMounted) {
+          setUser(null);
+          setToken(null);
+          clearAuthSession();
+          setTasksState([]);
+          setWeeklyReportsState([]);
+          setMonthlyReportsState([]);
+          setSettingsState(DEFAULT_SETTINGS);
+          setTemplatesState(DEFAULT_TEMPLATES);
+          setAuthLoading(false);
+        }
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  const login = useCallback((authenticatedUser: AuthUser, authToken: string) => {
+    setUser(authenticatedUser);
+    setToken(authToken);
+    setStoredToken(authToken);
+    setStoredUser(authenticatedUser);
+    loadUserWorkspace(authenticatedUser.id).then(workspace => {
+      if (workspace) {
+        setSettingsState(workspace.settings);
+        setTemplatesState(workspace.templates);
+        setTasksState(workspace.tasks);
+        setWeeklyReportsState(workspace.weeklyReports);
+        setMonthlyReportsState(workspace.monthlyReports);
+      }
+    });
+  }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.warn('Signout error:', e);
+    }
+    setUser(null);
+    setToken(null);
+    clearAuthSession();
+    const clean = clearAndResetDefaults();
+    setSettingsState(clean.settings);
+    setTemplatesState(clean.templates);
+    setTasksState([]);
+    setWeeklyReportsState([]);
+    setMonthlyReportsState([]);
+    setActiveNavTab('dashboard');
+  }, []);
+
+  const refreshWorkspace = useCallback(async () => {
+    if (user?.id) {
+      const workspace = await loadUserWorkspace(user.id);
+      if (workspace) {
+        setSettingsState(workspace.settings);
+        setTemplatesState(workspace.templates);
+        setTasksState(workspace.tasks);
+        setWeeklyReportsState(workspace.weeklyReports);
+        setMonthlyReportsState(workspace.monthlyReports);
+      }
+    }
+  }, [user?.id]);
 
   // Central check: Is a given date an OFF DAY?
   const isDateOffDay = useCallback(
@@ -244,38 +383,6 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     },
     [settings.weeklyOffDays, settings.customOffDates]
   );
-
-  // Ensure today's date always has recurring tasks generated from active templates (ONLY ON WORKING DAYS)
-  useEffect(() => {
-    const currentToday = getTodayISO();
-    if (isDateOffDay(currentToday)) return;
-    setTasksState(prev => {
-      const hasTodayTasks = prev.some(t => t.date === currentToday);
-      if (!hasTodayTasks) {
-        const generated = generateDayRecurringTasks(currentToday, templates, settings);
-        if (generated.length > 0) {
-          return [...prev, ...generated];
-        }
-      }
-      return prev;
-    });
-  }, [templates, settings, isDateOffDay]);
-
-  // Ensure any viewed selectedDate has recurring tasks generated if empty (ONLY ON WORKING DAYS)
-  useEffect(() => {
-    if (!selectedDate) return;
-    if (isDateOffDay(selectedDate)) return;
-    setTasksState(prev => {
-      const hasDateTasks = prev.some(t => t.date === selectedDate);
-      if (!hasDateTasks) {
-        const generated = generateDayRecurringTasks(selectedDate, templates, settings);
-        if (generated.length > 0) {
-          return [...prev, ...generated];
-        }
-      }
-      return prev;
-    });
-  }, [selectedDate, templates, settings, isDateOffDay]);
 
   // STRICT CENTRAL RULE: Purge any tasks that fall on configured off days
   useEffect(() => {
@@ -346,15 +453,19 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       createdAt: new Date().toISOString(),
     };
     setTasksState(prev => [...prev, newTask]);
+    if (user?.id) {
+      saveTaskDoc(user.id, newTask);
+    }
     return newTask;
-  }, [isDateOffDay]);
+  }, [isDateOffDay, user?.id]);
 
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
     if (updates.date && isDateOffDay(updates.date)) {
       throw new Error('This is an OFF DAY. Tasks cannot be scheduled on this date.');
     }
-    setTasksState(prev =>
-      prev.map(task => {
+    setTasksState(prev => {
+      let targetDoc: Task | null = null;
+      const nextList = prev.map(task => {
         if (task.id === id) {
           const updated = { ...task, ...updates };
           if (updates.status === 'completed' && !task.completedAt) {
@@ -362,20 +473,29 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           } else if (updates.status && updates.status !== 'completed') {
             updated.completedAt = undefined;
           }
+          targetDoc = updated;
           return updated;
         }
         return task;
-      })
-    );
-  }, [isDateOffDay]);
+      });
+      if (targetDoc && user?.id) {
+        saveTaskDoc(user.id, targetDoc);
+      }
+      return nextList;
+    });
+  }, [isDateOffDay, user?.id]);
 
   const deleteTask = useCallback((id: string) => {
     setTasksState(prev => prev.filter(t => t.id !== id));
-  }, []);
+    if (user?.id) {
+      deleteTaskDoc(user.id, id);
+    }
+  }, [user?.id]);
 
   const toggleTaskStatus = useCallback((id: string, explicitStatus?: TaskStatus) => {
-    setTasksState(prev =>
-      prev.map(task => {
+    setTasksState(prev => {
+      let targetDoc: Task | null = null;
+      const nextList = prev.map(task => {
         if (task.id !== id) return task;
         let newStatus: TaskStatus;
         if (explicitStatus) {
@@ -383,94 +503,72 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         } else {
           newStatus = task.status === 'completed' ? 'planned' : 'completed';
         }
-        return {
+        const updated = {
           ...task,
           status: newStatus,
           completedAt: newStatus === 'completed' ? new Date().toISOString() : undefined,
         };
-      })
-    );
-  }, []);
+        targetDoc = updated;
+        return updated;
+      });
+      if (targetDoc && user?.id) {
+        saveTaskDoc(user.id, targetDoc);
+      }
+      return nextList;
+    });
+  }, [user?.id]);
 
   const startTask = useCallback((id: string) => {
-    setTasksState(prev =>
-      prev.map(task => {
-        // Only one task active at a time: pause previously active task back to planned
+    setTasksState(prev => {
+      let targetDoc: Task | null = null;
+      const nextList = prev.map(task => {
         if (task.status === 'in_progress' && task.id !== id) {
-          return { ...task, status: 'planned' as TaskStatus };
+          const paused = { ...task, status: 'planned' as TaskStatus };
+          if (user?.id) saveTaskDoc(user.id, paused);
+          return paused;
         }
         if (task.id === id) {
-          return {
+          const updated = {
             ...task,
             status: 'in_progress' as TaskStatus,
             startedAt: task.startedAt || new Date().toISOString(),
           };
+          targetDoc = updated;
+          return updated;
         }
         return task;
-      })
-    );
-  }, []);
+      });
+      if (targetDoc && user?.id) {
+        saveTaskDoc(user.id, targetDoc);
+      }
+      return nextList;
+    });
+  }, [user?.id]);
 
   const completeTask = useCallback((id: string) => {
-    setTasksState(prev =>
-      prev.map(task => {
-        if (task.id === id) {
-          return {
-            ...task,
-            status: 'completed' as TaskStatus,
-            completedAt: new Date().toISOString(),
-          };
-        }
-        return task;
-      })
-    );
-  }, []);
+    updateTask(id, { status: 'completed' });
+  }, [updateTask]);
 
   const skipTask = useCallback((id: string, reason?: string) => {
-    setTasksState(prev =>
-      prev.map(task => {
-        if (task.id === id) {
-          return {
-            ...task,
-            status: 'skipped' as TaskStatus,
-            skippedReason: reason !== undefined ? reason.trim() : task.skippedReason || '',
-          };
-        }
-        return task;
-      })
-    );
-  }, []);
+    updateTask(id, { status: 'skipped', skippedReason: reason !== undefined ? reason.trim() : '' });
+  }, [updateTask]);
 
   const rescheduleTask = useCallback((id: string, newDate: string, newTime?: string) => {
     if (isDateOffDay(newDate)) {
       throw new Error('This is an OFF DAY. Tasks cannot be scheduled on this date.');
     }
-    setTasksState(prev =>
-      prev.map(task => {
-        if (task.id !== id) return task;
-        return {
-          ...task,
-          date: newDate,
-          startTime: newTime !== undefined && newTime !== '' ? newTime : task.startTime,
-          status: 'rescheduled' as TaskStatus,
-          originalDate: task.originalDate || task.date,
-          rescheduledDate: newDate,
-          rescheduledAt: new Date().toISOString(),
-        };
-      })
-    );
-  }, [isDateOffDay]);
+    updateTask(id, {
+      date: newDate,
+      startTime: newTime !== undefined && newTime !== '' ? newTime : undefined,
+      status: 'rescheduled',
+      rescheduledDate: newDate,
+      rescheduledAt: new Date().toISOString(),
+    });
+  }, [isDateOffDay, updateTask]);
 
   const updateTaskNotes = useCallback((id: string, notes: string) => {
-    setTasksState(prev =>
-      prev.map(task => {
-        if (task.id === id) {
-          return { ...task, notes };
-        }
-        return task;
-      })
-    );
-  }, []);
+    updateTask(id, { notes });
+  }, [updateTask]);
 
   const saveDailyNotes = useCallback((date: string, notes: string) => {
     setSettingsState(prev => ({
@@ -781,32 +879,67 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       setTasksState(allNewTasks);
 
+      if (user?.id) {
+        batchSaveTasksDocs(user.id, allNewTasks);
+        saveSettingsDoc(user.id, {
+          ...settings,
+          weeklyOffDays: config.weeklyOffDays,
+          workingDays: config.workingDays || settings.workingDays,
+          customOffDates: config.customOffDates || settings.customOffDates,
+          workDayStart: config.workDayStart || settings.workDayStart,
+          workDayEnd: config.workDayEnd || settings.workDayEnd,
+          configuredMonths: updatedConfigured,
+          monthlyNotes: updatedNotes,
+        });
+      }
+
       closeMonthlySetup();
     },
-    [templates, tasks, settings, closeMonthlySetup]
+    [templates, tasks, settings, closeMonthlySetup, user?.id]
   );
 
   // Template actions
   const updateTemplate = useCallback((template: TaskTemplate) => {
-    setTemplatesState(prev => prev.map(t => (t.id === template.id ? template : t)));
-  }, []);
+    setTemplatesState(prev => {
+      const updated = prev.map(t => (t.id === template.id ? template : t));
+      if (user?.id) {
+        saveTemplatesDoc(user.id, updated);
+      }
+      return updated;
+    });
+  }, [user?.id]);
 
   const addTemplate = useCallback((tmplData: Omit<TaskTemplate, 'id'>) => {
     const newTmpl: TaskTemplate = {
       ...tmplData,
       id: `tmpl-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     };
-    setTemplatesState(prev => [...prev, newTmpl]);
-  }, []);
+    setTemplatesState(prev => {
+      const updated = [...prev, newTmpl];
+      if (user?.id) {
+        saveTemplatesDoc(user.id, updated);
+      }
+      return updated;
+    });
+  }, [user?.id]);
 
   const deleteTemplate = useCallback((id: string) => {
-    setTemplatesState(prev => prev.filter(t => t.id !== id));
-  }, []);
+    setTemplatesState(prev => {
+      const updated = prev.filter(t => t.id !== id);
+      if (user?.id) {
+        saveTemplatesDoc(user.id, updated);
+      }
+      return updated;
+    });
+  }, [user?.id]);
 
   // Settings
   const updateSettings = useCallback((newSettings: Partial<UserSettings>) => {
     setSettingsState(prev => {
       const merged = { ...prev, ...newSettings };
+      if (user?.id) {
+        saveSettingsDoc(user.id, merged);
+      }
       return merged;
     });
     // STRICT RULE: If off days change, purge tasks on newly configured off days
@@ -817,59 +950,55 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return prev.filter(t => !isDateOff(t.date, offDays, customOffs));
       });
     }
-  }, [settings.weeklyOffDays, settings.customOffDates]);
+  }, [settings.weeklyOffDays, settings.customOffDates, user?.id]);
 
   // Reports
   const saveWeeklyReflection = useCallback(
     (weekId: string, startDate: string, endDate: string, reflection: WeeklyReflection) => {
+      const reportId = `wreport-${weekId}`;
+      const record: WeeklyReportRecord = {
+        id: reportId,
+        weekIdentifier: weekId,
+        startDate,
+        endDate,
+        reflection,
+        savedAt: new Date().toISOString(),
+      };
       setWeeklyReportsState(prev => {
         const existing = prev.find(r => r.weekIdentifier === weekId);
         if (existing) {
-          return prev.map(r =>
-            r.weekIdentifier === weekId
-              ? { ...r, reflection, savedAt: new Date().toISOString() }
-              : r
-          );
+          return prev.map(r => (r.weekIdentifier === weekId ? record : r));
         } else {
-          return [
-            ...prev,
-            {
-              id: `wreport-${weekId}`,
-              weekIdentifier: weekId,
-              startDate,
-              endDate,
-              reflection,
-              savedAt: new Date().toISOString(),
-            },
-          ];
+          return [...prev, record];
         }
       });
+      if (user?.id) {
+        saveReportDoc(user.id, reportId, 'weekly', weekId, record);
+      }
     },
-    []
+    [user?.id]
   );
 
   const saveMonthlyReflection = useCallback((monthId: string, reflection: MonthlyReflection) => {
+    const reportId = `mreport-${monthId}`;
+    const record: MonthlyReportRecord = {
+      id: reportId,
+      monthIdentifier: monthId,
+      reflection,
+      savedAt: new Date().toISOString(),
+    };
     setMonthlyReportsState(prev => {
       const existing = prev.find(r => r.monthIdentifier === monthId);
       if (existing) {
-        return prev.map(r =>
-          r.monthIdentifier === monthId
-            ? { ...r, reflection, savedAt: new Date().toISOString() }
-            : r
-        );
+        return prev.map(r => (r.monthIdentifier === monthId ? record : r));
       } else {
-        return [
-          ...prev,
-          {
-            id: `mreport-${monthId}`,
-            monthIdentifier: monthId,
-            reflection,
-            savedAt: new Date().toISOString(),
-          },
-        ];
+        return [...prev, record];
       }
     });
-  }, []);
+    if (user?.id) {
+      saveReportDoc(user.id, reportId, 'monthly', monthId, record);
+    }
+  }, [user?.id]);
 
   // Reset and import/export
   const resetAll = useCallback(() => {
@@ -1137,6 +1266,14 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <WorkPlanContext.Provider
       value={{
+        user,
+        token,
+        isAuthenticated,
+        isAdmin,
+        authLoading,
+        login,
+        logout,
+        refreshWorkspace,
         tasks,
         templates,
         settings,

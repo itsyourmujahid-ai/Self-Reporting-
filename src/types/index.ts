@@ -148,6 +148,15 @@ export interface MonthlyPlanConfig {
   regenerateOption?: 'replace_recurring_only' | 'keep_existing_append_missing';
 }
 
-export type ActiveNavTab = 'dashboard' | 'today' | 'calendar' | 'planner' | 'tasks' | 'reports' | 'settings';
+export interface AuthUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: 'user' | 'admin';
+  status?: 'active' | 'suspended';
+}
+
+export type ActiveNavTab = 'dashboard' | 'today' | 'calendar' | 'planner' | 'tasks' | 'reports' | 'settings' | 'admin';
 export type PlannerSubTab = 'daily' | 'weekly' | 'monthly';
 export type ReportsSubTab = 'weekly' | 'monthly';
+
