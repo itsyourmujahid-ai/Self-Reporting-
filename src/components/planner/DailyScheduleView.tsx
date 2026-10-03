@@ -7,6 +7,7 @@ import {
   isWeeklyOff,
   getTodayISO,
   isTaskOverdue,
+  getNextWorkingDay,
 } from '../../utils/dateUtils';
 import {
   ChevronLeft,
@@ -564,6 +565,19 @@ export const DailyScheduleView: React.FC = () => {
           </div>
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md bg-neutral-100 border border-neutral-200 text-xs font-semibold text-neutral-600 font-mono">
             0 tasks · 0 pending · 0 completed
+          </div>
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                const nextWorking = getNextWorkingDay(selectedDate, settings.weeklyOffDays, settings.customOffDates);
+                setSelectedDate(nextWorking);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-[#111111] hover:bg-black text-white text-xs font-semibold rounded-lg shadow-2xs transition-all cursor-pointer"
+            >
+              <span>View Next Working Day ({formatDisplayDate(getNextWorkingDay(selectedDate, settings.weeklyOffDays, settings.customOffDates))})</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       ) : (

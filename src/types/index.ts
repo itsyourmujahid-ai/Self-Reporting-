@@ -6,6 +6,7 @@ export type TaskPriority = 'critical' | 'high' | 'medium' | 'low' | 'urgent';
 
 export interface Task {
   id: string;
+  userId?: string;
   title: string;
   type: TaskType;
   date: string; // YYYY-MM-DD

@@ -38,10 +38,12 @@ import {
   saveTaskDoc,
   deleteTaskDoc,
   batchSaveTasksDocs,
+  batchDeleteTasksDocs,
   saveSettingsDoc,
   saveTemplatesDoc,
   saveReportDoc,
 } from '../services/firestoreService';
+import { synchronizeTasksWithTemplates, getRecurringTaskId } from '../services/schedulingEngine';
 import {
   getTodayISO,
   formatISODate,
@@ -172,6 +174,9 @@ interface WorkPlanContextType {
   saveWeeklyReflection: (weekId: string, startDate: string, endDate: string, reflection: WeeklyReflection) => void;
   saveMonthlyReflection: (monthId: string, reflection: MonthlyReflection) => void;
 
+  // Task synchronization with active templates
+  syncTasks: (targetMonths?: string[]) => void;
+
   // Live stats
   todayStats: DailyStats;
   getDailyStats: (dateISO: string) => DailyStats;
@@ -213,8 +218,15 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const isAuthenticated = Boolean(user && token);
   const isAdmin = user?.role === 'admin';
 
-  // Load initial persistent state from local cache
-  const [initialData] = useState(() => loadStoredData());
+  // Load initial persistent state from local cache with automatic template synchronization
+  const [initialData] = useState(() => {
+    const raw = loadStoredData();
+    const sync = synchronizeTasksWithTemplates(raw.tasks, raw.templates, raw.settings);
+    return {
+      ...raw,
+      tasks: sync.synchronizedTasks,
+    };
+  });
 
   const [settings, setSettingsState] = useState<UserSettings>(initialData.settings);
   const [templates, setTemplatesState] = useState<TaskTemplate[]>(initialData.templates);
@@ -287,11 +299,42 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
           const workspace = await loadUserWorkspace(firebaseUser.uid);
           if (workspace && isMounted) {
+            // Reconcile and backfill missing task instances from active templates
+            const syncResult = synchronizeTasksWithTemplates(
+              workspace.tasks,
+              workspace.templates,
+              workspace.settings,
+              undefined,
+              firebaseUser.uid
+            );
+
             setSettingsState(workspace.settings);
             setTemplatesState(workspace.templates);
-            setTasksState(workspace.tasks);
+            setTasksState(syncResult.synchronizedTasks);
             setWeeklyReportsState(workspace.weeklyReports);
             setMonthlyReportsState(workspace.monthlyReports);
+
+            // Persist newly generated instances to Firestore
+            if (syncResult.newTasksCreated.length > 0) {
+              batchSaveTasksDocs(firebaseUser.uid, syncResult.newTasksCreated).catch(err => {
+                console.warn('Sync save new tasks error:', err);
+              });
+            }
+            if (syncResult.tasksUpdated.length > 0) {
+              batchSaveTasksDocs(firebaseUser.uid, syncResult.tasksUpdated).catch(err => {
+                console.warn('Sync save updated tasks error:', err);
+              });
+            }
+            if (syncResult.oldIdsToCleanup && syncResult.oldIdsToCleanup.length > 0) {
+              batchDeleteTasksDocs(firebaseUser.uid, syncResult.oldIdsToCleanup).catch(err => {
+                console.warn('Sync delete old task IDs error:', err);
+              });
+            }
+            if (syncResult.tasksRemoved.length > 0) {
+              batchDeleteTasksDocs(firebaseUser.uid, syncResult.tasksRemoved.map(t => t.id)).catch(err => {
+                console.warn('Sync delete tasks error:', err);
+              });
+            }
           }
         } catch (e) {
           console.warn('Firebase auth initialization error:', e);
@@ -321,6 +364,34 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   }, []);
 
+  const syncTasks = useCallback((targetMonths?: string[]) => {
+    setTasksState(prev => {
+      const syncResult = synchronizeTasksWithTemplates(prev, templates, settings, targetMonths, user?.id);
+      if (user?.id) {
+        if (syncResult.newTasksCreated.length > 0) {
+          batchSaveTasksDocs(user.id, syncResult.newTasksCreated).catch(console.warn);
+        }
+        if (syncResult.tasksUpdated.length > 0) {
+          batchSaveTasksDocs(user.id, syncResult.tasksUpdated).catch(console.warn);
+        }
+        if (syncResult.oldIdsToCleanup && syncResult.oldIdsToCleanup.length > 0) {
+          batchDeleteTasksDocs(user.id, syncResult.oldIdsToCleanup).catch(console.warn);
+        }
+        if (syncResult.tasksRemoved.length > 0) {
+          batchDeleteTasksDocs(user.id, syncResult.tasksRemoved.map(t => t.id)).catch(console.warn);
+        }
+      }
+      return syncResult.synchronizedTasks;
+    });
+  }, [templates, settings, user?.id]);
+
+  // Synchronize tasks whenever currentMonth changes (e.g. forward planning or navigation)
+  useEffect(() => {
+    if (currentMonth) {
+      syncTasks([currentMonth]);
+    }
+  }, [currentMonth, syncTasks]);
+
   const login = useCallback((authenticatedUser: AuthUser, authToken: string) => {
     setUser(authenticatedUser);
     setToken(authToken);
@@ -328,11 +399,31 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setStoredUser(authenticatedUser);
     loadUserWorkspace(authenticatedUser.id).then(workspace => {
       if (workspace) {
+        const syncResult = synchronizeTasksWithTemplates(
+          workspace.tasks,
+          workspace.templates,
+          workspace.settings,
+          undefined,
+          authenticatedUser.id
+        );
         setSettingsState(workspace.settings);
         setTemplatesState(workspace.templates);
-        setTasksState(workspace.tasks);
+        setTasksState(syncResult.synchronizedTasks);
         setWeeklyReportsState(workspace.weeklyReports);
         setMonthlyReportsState(workspace.monthlyReports);
+
+        if (syncResult.newTasksCreated.length > 0) {
+          batchSaveTasksDocs(authenticatedUser.id, syncResult.newTasksCreated).catch(console.warn);
+        }
+        if (syncResult.tasksUpdated.length > 0) {
+          batchSaveTasksDocs(authenticatedUser.id, syncResult.tasksUpdated).catch(console.warn);
+        }
+        if (syncResult.oldIdsToCleanup && syncResult.oldIdsToCleanup.length > 0) {
+          batchDeleteTasksDocs(authenticatedUser.id, syncResult.oldIdsToCleanup).catch(console.warn);
+        }
+        if (syncResult.tasksRemoved.length > 0) {
+          batchDeleteTasksDocs(authenticatedUser.id, syncResult.tasksRemoved.map(t => t.id)).catch(console.warn);
+        }
       }
     });
   }, []);
@@ -359,11 +450,26 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (user?.id) {
       const workspace = await loadUserWorkspace(user.id);
       if (workspace) {
+        const syncResult = synchronizeTasksWithTemplates(
+          workspace.tasks,
+          workspace.templates,
+          workspace.settings
+        );
         setSettingsState(workspace.settings);
         setTemplatesState(workspace.templates);
-        setTasksState(workspace.tasks);
+        setTasksState(syncResult.synchronizedTasks);
         setWeeklyReportsState(workspace.weeklyReports);
         setMonthlyReportsState(workspace.monthlyReports);
+
+        if (syncResult.newTasksCreated.length > 0) {
+          batchSaveTasksDocs(user.id, syncResult.newTasksCreated).catch(console.warn);
+        }
+        if (syncResult.tasksUpdated.length > 0) {
+          batchSaveTasksDocs(user.id, syncResult.tasksUpdated).catch(console.warn);
+        }
+        if (syncResult.tasksRemoved.length > 0) {
+          batchDeleteTasksDocs(user.id, syncResult.tasksRemoved.map(t => t.id)).catch(console.warn);
+        }
       }
     }
   }, [user?.id]);
@@ -768,8 +874,10 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             // If user already completed or modified this task, keep existing one!
             if (!preservedKeys.has(taskKey)) {
               const endTime = addMinutesToTime(tmpl.preferredTime, tmpl.estimatedDuration);
+              const taskId = getRecurringTaskId(user?.id, tmpl.id, dateISO, tmpl.preferredTime);
               newGeneratedTasks.push({
-                id: `gen-${tmpl.id}-${dateISO}`,
+                id: taskId,
+                userId: user?.id || undefined,
                 title: tmpl.title,
                 type: 'recurring',
                 date: dateISO,
@@ -905,9 +1013,19 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (user?.id) {
         saveTemplatesDoc(user.id, updated);
       }
+      setTasksState(currentTasks => {
+        const syncResult = synchronizeTasksWithTemplates(currentTasks, updated, settings, undefined, user?.id);
+        if (user?.id) {
+          if (syncResult.newTasksCreated.length > 0) batchSaveTasksDocs(user.id, syncResult.newTasksCreated).catch(console.warn);
+          if (syncResult.tasksUpdated.length > 0) batchSaveTasksDocs(user.id, syncResult.tasksUpdated).catch(console.warn);
+          if (syncResult.oldIdsToCleanup && syncResult.oldIdsToCleanup.length > 0) batchDeleteTasksDocs(user.id, syncResult.oldIdsToCleanup).catch(console.warn);
+          if (syncResult.tasksRemoved.length > 0) batchDeleteTasksDocs(user.id, syncResult.tasksRemoved.map(t => t.id)).catch(console.warn);
+        }
+        return syncResult.synchronizedTasks;
+      });
       return updated;
     });
-  }, [user?.id]);
+  }, [user?.id, settings]);
 
   const addTemplate = useCallback((tmplData: Omit<TaskTemplate, 'id'>) => {
     const newTmpl: TaskTemplate = {
@@ -919,9 +1037,19 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (user?.id) {
         saveTemplatesDoc(user.id, updated);
       }
+      setTasksState(currentTasks => {
+        const syncResult = synchronizeTasksWithTemplates(currentTasks, updated, settings, undefined, user?.id);
+        if (user?.id) {
+          if (syncResult.newTasksCreated.length > 0) batchSaveTasksDocs(user.id, syncResult.newTasksCreated).catch(console.warn);
+          if (syncResult.tasksUpdated.length > 0) batchSaveTasksDocs(user.id, syncResult.tasksUpdated).catch(console.warn);
+          if (syncResult.oldIdsToCleanup && syncResult.oldIdsToCleanup.length > 0) batchDeleteTasksDocs(user.id, syncResult.oldIdsToCleanup).catch(console.warn);
+          if (syncResult.tasksRemoved.length > 0) batchDeleteTasksDocs(user.id, syncResult.tasksRemoved.map(t => t.id)).catch(console.warn);
+        }
+        return syncResult.synchronizedTasks;
+      });
       return updated;
     });
-  }, [user?.id]);
+  }, [user?.id, settings]);
 
   const deleteTemplate = useCallback((id: string) => {
     setTemplatesState(prev => {
@@ -929,9 +1057,19 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (user?.id) {
         saveTemplatesDoc(user.id, updated);
       }
+      setTasksState(currentTasks => {
+        const syncResult = synchronizeTasksWithTemplates(currentTasks, updated, settings, undefined, user?.id);
+        if (user?.id) {
+          if (syncResult.newTasksCreated.length > 0) batchSaveTasksDocs(user.id, syncResult.newTasksCreated).catch(console.warn);
+          if (syncResult.tasksUpdated.length > 0) batchSaveTasksDocs(user.id, syncResult.tasksUpdated).catch(console.warn);
+          if (syncResult.oldIdsToCleanup && syncResult.oldIdsToCleanup.length > 0) batchDeleteTasksDocs(user.id, syncResult.oldIdsToCleanup).catch(console.warn);
+          if (syncResult.tasksRemoved.length > 0) batchDeleteTasksDocs(user.id, syncResult.tasksRemoved.map(t => t.id)).catch(console.warn);
+        }
+        return syncResult.synchronizedTasks;
+      });
       return updated;
     });
-  }, [user?.id]);
+  }, [user?.id, settings]);
 
   // Settings
   const updateSettings = useCallback((newSettings: Partial<UserSettings>) => {
@@ -940,17 +1078,19 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (user?.id) {
         saveSettingsDoc(user.id, merged);
       }
+      setTasksState(currentTasks => {
+        const syncResult = synchronizeTasksWithTemplates(currentTasks, templates, merged, undefined, user?.id);
+        if (user?.id) {
+          if (syncResult.newTasksCreated.length > 0) batchSaveTasksDocs(user.id, syncResult.newTasksCreated).catch(console.warn);
+          if (syncResult.tasksUpdated.length > 0) batchSaveTasksDocs(user.id, syncResult.tasksUpdated).catch(console.warn);
+          if (syncResult.oldIdsToCleanup && syncResult.oldIdsToCleanup.length > 0) batchDeleteTasksDocs(user.id, syncResult.oldIdsToCleanup).catch(console.warn);
+          if (syncResult.tasksRemoved.length > 0) batchDeleteTasksDocs(user.id, syncResult.tasksRemoved.map(t => t.id)).catch(console.warn);
+        }
+        return syncResult.synchronizedTasks;
+      });
       return merged;
     });
-    // STRICT RULE: If off days change, purge tasks on newly configured off days
-    if (newSettings.weeklyOffDays || newSettings.customOffDates) {
-      setTasksState(prev => {
-        const offDays = newSettings.weeklyOffDays || settings.weeklyOffDays;
-        const customOffs = newSettings.customOffDates || settings.customOffDates;
-        return prev.filter(t => !isDateOff(t.date, offDays, customOffs));
-      });
-    }
-  }, [settings.weeklyOffDays, settings.customOffDates, user?.id]);
+  }, [templates, user?.id]);
 
   // Reports
   const saveWeeklyReflection = useCallback(
@@ -1328,6 +1468,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updateSettings,
         saveWeeklyReflection,
         saveMonthlyReflection,
+        syncTasks,
         todayStats,
         getDailyStats,
         thisWeekStats,

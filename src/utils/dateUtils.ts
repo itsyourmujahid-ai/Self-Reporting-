@@ -261,3 +261,20 @@ export function getMonthWorkingAndOffDays(
   };
 }
 
+/**
+ * Deterministic unique task ID generator according to requirement:
+ * userId + templateId + scheduledDate (plus preferred time when applicable).
+ * Ensures global uniqueness across all users and perfect idempotency.
+ */
+export function getRecurringTaskId(
+  userId: string | undefined | null,
+  templateId: string,
+  dateISO: string,
+  preferredTime?: string
+): string {
+  const safeUid = userId ? userId.replace(/[^a-zA-Z0-9_-]/g, '') : 'local';
+  const safeTmpl = templateId.replace(/[^a-zA-Z0-9_-]/g, '');
+  const timePart = preferredTime ? `_${preferredTime.replace(':', '')}` : '';
+  return `task_${safeUid}_${safeTmpl}_${dateISO}${timePart}`;
+}
+

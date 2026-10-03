@@ -16,6 +16,7 @@ import { handleFirestoreError, OperationType } from '../utils/firestoreErrors';
 import { Task, TaskTemplate, UserSettings, WeeklyReportRecord, MonthlyReportRecord } from '../types';
 import { DEFAULT_SETTINGS, DEFAULT_TEMPLATES } from '../utils/defaults';
 import { isDateOff } from '../utils/dateUtils';
+import { synchronizeTasksWithTemplates } from './schedulingEngine';
 
 export interface UserProfile {
   id: string;
@@ -78,6 +79,12 @@ export async function syncUserProfile(firebaseUser: FirebaseUser): Promise<UserP
         updatedAt: now,
       });
 
+      // Automatically generate real task instances for the new user according to templates & schedule
+      const initialSync = synchronizeTasksWithTemplates([], DEFAULT_TEMPLATES, DEFAULT_SETTINGS, undefined, uid);
+      if (initialSync.newTasksCreated.length > 0) {
+        await batchSaveTasksDocs(uid, initialSync.newTasksCreated);
+      }
+
       await logActivity(uid, email, 'signup', `User registered: ${email}`);
       return profile;
     } else {
@@ -124,13 +131,31 @@ export async function loadUserWorkspace(uid: string) {
     // 3. Tasks - strictly isolated by userId
     const tasksQuery = query(collection(db, 'tasks'), where('userId', '==', uid));
     const tasksSnap = await getDocs(tasksQuery);
-    let tasks: Task[] = [];
+    let rawTasks: Task[] = [];
     tasksSnap.forEach(d => {
-      tasks.push(d.data() as Task);
+      rawTasks.push(d.data() as Task);
     });
 
     // STRICT CENTRAL RULE: OFF DAY = ZERO TASKS!
-    tasks = tasks.filter(t => !isDateOff(t.date, settings.weeklyOffDays, settings.customOffDates));
+    rawTasks = rawTasks.filter(t => !isDateOff(t.date, settings.weeklyOffDays, settings.customOffDates));
+
+    // Automatically reconcile templates with task instances (idempotent, safe for new and existing users)
+    const syncResult = synchronizeTasksWithTemplates(rawTasks, templates, settings, undefined, uid);
+    const synchronizedTasks = syncResult.synchronizedTasks;
+
+    // Persist newly generated or migrated task instances in background
+    if (syncResult.newTasksCreated.length > 0) {
+      batchSaveTasksDocs(uid, syncResult.newTasksCreated).catch(console.warn);
+    }
+    if (syncResult.tasksUpdated.length > 0) {
+      batchSaveTasksDocs(uid, syncResult.tasksUpdated).catch(console.warn);
+    }
+    if (syncResult.oldIdsToCleanup && syncResult.oldIdsToCleanup.length > 0) {
+      batchDeleteTasksDocs(uid, syncResult.oldIdsToCleanup).catch(console.warn);
+    }
+    if (syncResult.tasksRemoved.length > 0) {
+      batchDeleteTasksDocs(uid, syncResult.tasksRemoved.map(t => t.id)).catch(console.warn);
+    }
 
     // 4. Reports - strictly isolated by userId
     const reportsQuery = query(collection(db, 'reports'), where('userId', '==', uid));
@@ -150,7 +175,7 @@ export async function loadUserWorkspace(uid: string) {
     return {
       settings,
       templates,
-      tasks,
+      tasks: synchronizedTasks,
       weeklyReports,
       monthlyReports,
     };
@@ -191,9 +216,8 @@ export async function deleteTaskDoc(uid: string, taskId: string): Promise<void> 
  * Batch saves tasks (e.g. from month planning generation)
  */
 export async function batchSaveTasksDocs(uid: string, tasksToSave: Task[], deleteRange?: { startDate: string; endDate: string }): Promise<void> {
+  if (!tasksToSave || tasksToSave.length === 0) return;
   try {
-    const batch = writeBatch(db);
-
     // If a deleteRange is specified, query tasks in that range to delete them
     if (deleteRange) {
       const q = query(
@@ -203,24 +227,50 @@ export async function batchSaveTasksDocs(uid: string, tasksToSave: Task[], delet
         where('date', '<=', deleteRange.endDate)
       );
       const existingRangeSnap = await getDocs(q);
+      const batch = writeBatch(db);
       existingRangeSnap.forEach(d => {
         batch.delete(d.ref);
       });
+      await batch.commit();
     }
 
-    // Add new tasks
-    for (const task of tasksToSave) {
-      const ref = doc(db, 'tasks', task.id);
-      batch.set(ref, {
-        ...task,
-        userId: uid,
-        updatedAt: new Date().toISOString(),
-      });
+    // Save in safe chunks of 400 (Firestore max is 500 per batch)
+    const CHUNK_SIZE = 400;
+    for (let i = 0; i < tasksToSave.length; i += CHUNK_SIZE) {
+      const chunk = tasksToSave.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      for (const task of chunk) {
+        const ref = doc(db, 'tasks', task.id);
+        batch.set(ref, {
+          ...task,
+          userId: uid,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      }
+      await batch.commit();
     }
-
-    await batch.commit();
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, 'tasks');
+  }
+}
+
+/**
+ * Batch deletes tasks
+ */
+export async function batchDeleteTasksDocs(uid: string, taskIds: string[]): Promise<void> {
+  if (!taskIds || taskIds.length === 0) return;
+  try {
+    const CHUNK_SIZE = 400;
+    for (let i = 0; i < taskIds.length; i += CHUNK_SIZE) {
+      const chunk = taskIds.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      for (const id of chunk) {
+        batch.delete(doc(db, 'tasks', id));
+      }
+      await batch.commit();
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, 'tasks');
   }
 }
 

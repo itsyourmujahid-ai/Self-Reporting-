@@ -1,5 +1,14 @@
 import { TaskTemplate, UserSettings, Task, WeeklyReportRecord, MonthlyReportRecord } from '../types';
-import { addMinutesToTime, formatISODate, getWeekIdentifier, getWeekRange, isDateOff, parseISODate } from './dateUtils';
+import {
+  addMinutesToTime,
+  formatISODate,
+  getWeekIdentifier,
+  getWeekRange,
+  isDateOff,
+  parseISODate,
+  getTodayISO,
+  getRecurringTaskId,
+} from './dateUtils';
 
 export const DEFAULT_SETTINGS: UserSettings = {
   userName: 'Personal Workspace',
@@ -11,7 +20,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   defaultPriority: 'medium',
   categories: ['Content', 'Operations', 'Sales', 'Meetings', 'Follow-up', 'Planning'],
   projects: ['Core Routine', 'Lead Generation', 'Personal Brand', 'Client Relations'],
-  configuredMonths: ['2026-09'],
+  configuredMonths: [getTodayISO().slice(0, 7)],
 };
 
 export const DEFAULT_TEMPLATES: TaskTemplate[] = [
@@ -215,7 +224,7 @@ export function generateDayRecurringTasks(
     if (shouldGenerate) {
       const endTime = addMinutesToTime(tmpl.preferredTime, tmpl.estimatedDuration);
       generated.push({
-        id: `gen-${tmpl.id}-${dateISO}`,
+        id: getRecurringTaskId(undefined, tmpl.id, dateISO, tmpl.preferredTime),
         title: tmpl.title,
         type: 'recurring',
         date: dateISO,
