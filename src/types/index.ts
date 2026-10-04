@@ -70,6 +70,7 @@ export interface TaskTemplate {
 
 export interface UserSettings {
   userName: string;
+  startDate?: string; // Persistent cycle start date (YYYY-MM-DD)
   // Default weekly off days: Friday (5) and Saturday (6)
   weeklyOffDays: number[];
   workingDays: number[];

@@ -17,6 +17,7 @@ import {
   ArrowUpDown,
   Play,
   RotateCcw,
+  Lock,
 } from 'lucide-react';
 import { getTodayISO, isTaskOverdue, getWeekRange } from '../../utils/dateUtils';
 
@@ -323,16 +324,37 @@ export const TasksView: React.FC = () => {
                 }`}
               >
                 <div className="flex items-start gap-2.5">
-                  <button
-                    onClick={() => toggleTaskStatus(t.id)}
-                    className="mt-0.5 text-[#4B5563] hover:text-[#E50914] shrink-0 cursor-pointer"
-                  >
-                    {isDone ? (
-                      <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />
-                    ) : (
-                      <Circle className="w-4.5 h-4.5 hover:stroke-[#E50914]" />
-                    )}
-                  </button>
+                  {/* Daily Completion Lock on Checkbox */}
+                  {t.date > todayISO ? (
+                    <div
+                      className="mt-0.5 text-neutral-400 shrink-0 cursor-not-allowed"
+                      title={`Locked until ${t.date}. Only today's tasks can be completed.`}
+                    >
+                      <Lock className="w-4.5 h-4.5 text-neutral-400" />
+                    </div>
+                  ) : t.date < todayISO ? (
+                    <div
+                      className="mt-0.5 text-neutral-400 shrink-0"
+                      title={isDone ? 'Completed on historical date' : 'Historical task (Incomplete)'}
+                    >
+                      {isDone ? (
+                        <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />
+                      ) : (
+                        <Circle className="w-4.5 h-4.5 text-neutral-300 stroke-dashed" />
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => toggleTaskStatus(t.id)}
+                      className="mt-0.5 text-[#4B5563] hover:text-[#E50914] shrink-0 cursor-pointer"
+                    >
+                      {isDone ? (
+                        <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />
+                      ) : (
+                        <Circle className="w-4.5 h-4.5 hover:stroke-[#E50914]" />
+                      )}
+                    </button>
+                  )}
 
                   <div className="flex-1 min-w-0">
                     <p
@@ -351,6 +373,15 @@ export const TasksView: React.FC = () => {
                       <span className="capitalize">{t.type.replace('_', ' ')}</span>
                       <span>·</span>
                       <span className="capitalize font-semibold text-[#111111]">{t.priority}</span>
+                      {t.date > todayISO && (
+                        <>
+                          <span>·</span>
+                          <span className="text-[10px] font-semibold text-neutral-600 bg-neutral-100 border border-neutral-200 px-1 rounded inline-flex items-center gap-0.5">
+                            <Lock className="w-2.5 h-2.5 text-neutral-500" />
+                            Upcoming
+                          </span>
+                        </>
+                      )}
                     </div>
 
                     {isInProgress && (
@@ -384,41 +415,57 @@ export const TasksView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Actions Row */}
+                {/* Actions Row with Daily Lock */}
                 <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-between flex-wrap gap-1.5">
                   <div className="flex items-center gap-1 flex-wrap">
-                    {t.type === 'meeting' && !isDone && (
-                      <button
-                        onClick={() => openMeetingModal(t)}
-                        className="text-[11px] font-semibold text-white bg-blue-700 hover:bg-blue-800 px-2 py-1 rounded shadow-xs cursor-pointer"
+                    {t.date > todayISO ? (
+                      <span
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-500 bg-neutral-100 border border-neutral-200 px-2 py-1 rounded select-none cursor-not-allowed"
+                        title={`Locked until ${t.date}. Only today's tasks can be completed.`}
                       >
-                        Conclude
-                      </button>
-                    )}
-                    {t.type === 'follow_up' && !isDone && (
-                      <button
-                        onClick={() => openFollowUpModal(t)}
-                        className="text-[11px] font-semibold text-white bg-amber-700 hover:bg-amber-800 px-2 py-1 rounded shadow-xs cursor-pointer"
-                      >
-                        Follow-up
-                      </button>
-                    )}
-                    {!isDone && !isInProgress && !isSkipped && (
-                      <button
-                        onClick={() => startTask(t.id)}
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#111111] bg-neutral-100 hover:bg-neutral-200 border border-[#E5E7EB] px-2 py-1 rounded cursor-pointer"
-                      >
-                        <Play className="w-3 h-3 fill-[#111111]" />
-                        <span>Start</span>
-                      </button>
-                    )}
-                    {!isDone && !isSkipped && (
-                      <button
-                        onClick={() => skipTask(t.id)}
-                        className="text-[11px] text-[#4B5563] hover:text-[#111111] border border-[#E5E7EB] px-2 py-1 rounded hover:bg-neutral-50 cursor-pointer"
-                      >
-                        Skip
-                      </button>
+                        <Lock className="w-3 h-3 text-neutral-400" />
+                        <span>Upcoming (Locked)</span>
+                      </span>
+                    ) : t.date < todayISO ? (
+                      <span className="text-[11px] text-neutral-500 italic px-1">
+                        Historical record
+                      </span>
+                    ) : (
+                      <>
+                        {t.type === 'meeting' && !isDone && (
+                          <button
+                            onClick={() => openMeetingModal(t)}
+                            className="text-[11px] font-semibold text-white bg-blue-700 hover:bg-blue-800 px-2 py-1 rounded shadow-xs cursor-pointer"
+                          >
+                            Conclude
+                          </button>
+                        )}
+                        {t.type === 'follow_up' && !isDone && (
+                          <button
+                            onClick={() => openFollowUpModal(t)}
+                            className="text-[11px] font-semibold text-white bg-amber-700 hover:bg-amber-800 px-2 py-1 rounded shadow-xs cursor-pointer"
+                          >
+                            Follow-up
+                          </button>
+                        )}
+                        {!isDone && !isInProgress && !isSkipped && (
+                          <button
+                            onClick={() => startTask(t.id)}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#111111] bg-neutral-100 hover:bg-neutral-200 border border-[#E5E7EB] px-2 py-1 rounded cursor-pointer"
+                          >
+                            <Play className="w-3 h-3 fill-[#111111]" />
+                            <span>Start</span>
+                          </button>
+                        )}
+                        {!isDone && !isSkipped && (
+                          <button
+                            onClick={() => skipTask(t.id)}
+                            className="text-[11px] text-[#4B5563] hover:text-[#111111] border border-[#E5E7EB] px-2 py-1 rounded hover:bg-neutral-50 cursor-pointer"
+                          >
+                            Skip
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
 
@@ -543,19 +590,39 @@ export const TasksView: React.FC = () => {
                           : ''
                       }`}
                     >
-                      {/* Status / Complete Toggle */}
+                      {/* Status / Complete Toggle with Daily Lock */}
                       <td className="py-2 px-3 text-center">
-                        <button
-                          onClick={() => toggleTaskStatus(t.id)}
-                          className="text-neutral-400 hover:text-neutral-900 transition-colors"
-                          title={isDone ? 'Reopen Task' : 'Complete Task'}
-                        >
-                          {isDone ? (
-                            <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600 inline" />
-                          ) : (
-                            <Circle className="w-4.5 h-4.5 hover:stroke-neutral-800 inline" />
-                          )}
-                        </button>
+                        {t.date > todayISO ? (
+                          <span
+                            className="inline-block text-neutral-400 cursor-not-allowed"
+                            title={`Locked until ${t.date}. Only today's tasks can be completed.`}
+                          >
+                            <Lock className="w-4 h-4 text-neutral-400 inline" />
+                          </span>
+                        ) : t.date < todayISO ? (
+                          <span
+                            className="inline-block text-neutral-400"
+                            title={isDone ? 'Completed' : 'Historical task'}
+                          >
+                            {isDone ? (
+                              <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600 inline" />
+                            ) : (
+                              <Circle className="w-4.5 h-4.5 text-neutral-300 stroke-dashed inline" />
+                            )}
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => toggleTaskStatus(t.id)}
+                            className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                            title={isDone ? 'Reopen Task' : 'Complete Task'}
+                          >
+                            {isDone ? (
+                              <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600 inline" />
+                            ) : (
+                              <Circle className="w-4.5 h-4.5 hover:stroke-neutral-800 inline" />
+                            )}
+                          </button>
+                        )}
                       </td>
 
                       {/* Date & Time */}
@@ -646,44 +713,58 @@ export const TasksView: React.FC = () => {
                       {/* Actions */}
                       <td className="py-2 px-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
-                          {t.type === 'meeting' && !isDone && (
-                            <button
-                              onClick={() => openMeetingModal(t)}
-                              className="text-[10px] font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200"
-                              title="Conclude Meeting"
+                          {t.date > todayISO ? (
+                            <span
+                              className="inline-flex items-center gap-1 text-[10px] font-medium text-neutral-500 bg-neutral-100 border border-neutral-200 px-1.5 py-0.5 rounded select-none cursor-not-allowed"
+                              title={`Locked until ${t.date}. Available on scheduled date.`}
                             >
-                              Conclude
-                            </button>
-                          )}
+                              <Lock className="w-2.5 h-2.5 text-neutral-400" />
+                              <span>Upcoming</span>
+                            </span>
+                          ) : t.date < todayISO ? (
+                            null
+                          ) : (
+                            <>
+                              {t.type === 'meeting' && !isDone && (
+                                <button
+                                  onClick={() => openMeetingModal(t)}
+                                  className="text-[10px] font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 cursor-pointer"
+                                  title="Conclude Meeting"
+                                >
+                                  Conclude
+                                </button>
+                              )}
 
-                          {t.type === 'follow_up' && !isDone && (
-                            <button
-                              onClick={() => openFollowUpModal(t)}
-                              className="text-[10px] font-semibold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200"
-                              title="Complete & Schedule Next Follow-up"
-                            >
-                              Follow-up
-                            </button>
-                          )}
+                              {t.type === 'follow_up' && !isDone && (
+                                <button
+                                  onClick={() => openFollowUpModal(t)}
+                                  className="text-[10px] font-semibold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200 cursor-pointer"
+                                  title="Complete & Schedule Next Follow-up"
+                                >
+                                  Follow-up
+                                </button>
+                              )}
 
-                          {!isDone && !isInProgress && !isSkipped && (
-                            <button
-                              onClick={() => startTask(t.id)}
-                              className="p-1 text-neutral-500 hover:text-neutral-900 rounded"
-                              title="Start Task"
-                            >
-                              <Play className="w-3.5 h-3.5 fill-neutral-600" />
-                            </button>
-                          )}
+                              {!isDone && !isInProgress && !isSkipped && (
+                                <button
+                                  onClick={() => startTask(t.id)}
+                                  className="p-1 text-neutral-500 hover:text-neutral-900 rounded cursor-pointer"
+                                  title="Start Task"
+                                >
+                                  <Play className="w-3.5 h-3.5 fill-neutral-600" />
+                                </button>
+                              )}
 
-                          {!isDone && !isSkipped && (
-                            <button
-                              onClick={() => skipTask(t.id)}
-                              className="text-[10px] px-1.5 py-0.5 text-neutral-500 hover:text-neutral-900 border border-neutral-200 rounded"
-                              title="Skip"
-                            >
-                              Skip
-                            </button>
+                              {!isDone && !isSkipped && (
+                                <button
+                                  onClick={() => skipTask(t.id)}
+                                  className="text-[10px] px-1.5 py-0.5 text-neutral-500 hover:text-neutral-900 border border-neutral-200 rounded cursor-pointer"
+                                  title="Skip"
+                                >
+                                  Skip
+                                </button>
+                              )}
+                            </>
                           )}
 
                           <button

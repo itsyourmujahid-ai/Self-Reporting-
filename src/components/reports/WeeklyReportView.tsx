@@ -50,8 +50,10 @@ export const WeeklyReportView: React.FC = () => {
 
   // Tasks belonging to this week
   const weekTasks = useMemo(() => {
-    return tasks.filter(t => t.date >= weekRange.startISO && t.date <= weekRange.endISO);
-  }, [tasks, weekRange.startISO, weekRange.endISO]);
+    return tasks.filter(
+      t => t.date >= weekRange.startISO && t.date <= weekRange.endISO && (!settings.startDate || t.date >= settings.startDate)
+    );
+  }, [tasks, weekRange.startISO, weekRange.endISO, settings.startDate]);
 
   // Aggregate quantitative metrics (Requirement 4)
   const totalTasks = weekTasks.length;

@@ -33,6 +33,7 @@ import {
   CalendarCheck,
   PhoneCall,
   Coffee,
+  Lock,
 } from 'lucide-react';
 import { Task, TaskPriority, TaskStatus, TaskType } from '../../types';
 
@@ -62,6 +63,8 @@ export const DailyScheduleView: React.FC = () => {
 
   const todayISO = getTodayISO();
   const isSelectedToday = selectedDate === todayISO;
+  const isFutureDate = selectedDate > todayISO;
+  const isPastDate = selectedDate < todayISO;
   const isOffDay = isDateOffDay(selectedDate);
   const stats = getDailyStats(selectedDate);
 
@@ -259,6 +262,17 @@ export const DailyScheduleView: React.FC = () => {
               {isSelectedToday && (
                 <span className="text-[10px] font-bold text-white bg-[#E50914] px-1.5 py-0.5 rounded uppercase tracking-wider">
                   Today
+                </span>
+              )}
+              {isFutureDate && (
+                <span className="text-[10px] font-bold text-neutral-700 bg-neutral-100 border border-neutral-300 px-2 py-0.5 rounded uppercase tracking-wider inline-flex items-center gap-1">
+                  <Lock className="w-2.5 h-2.5 text-neutral-500" />
+                  Upcoming · View Only
+                </span>
+              )}
+              {isPastDate && (
+                <span className="text-[10px] font-bold text-neutral-600 bg-neutral-100 border border-neutral-300 px-2 py-0.5 rounded uppercase tracking-wider">
+                  Historical · Read Only
                 </span>
               )}
               {isOffDay && (
@@ -652,21 +666,41 @@ export const DailyScheduleView: React.FC = () => {
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                       {/* Left Block: Checkbox + Time + Title + Metadata */}
                       <div className="flex items-start gap-2.5 sm:gap-3 flex-1 min-w-0">
-                        {/* Direct Completion Checkbox */}
-                        <button
-                          onClick={() => toggleTaskStatus(task.id)}
-                          className="text-[#4B5563] hover:text-[#E50914] transition-colors shrink-0 mt-0.5 cursor-pointer"
-                          title={isCompleted ? 'Mark Pending' : 'Mark Completed'}
-                          aria-label={isCompleted ? 'Mark Pending' : 'Mark Completed'}
-                        >
-                          {isCompleted ? (
-                            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                          ) : isInProgress ? (
-                            <Play className="w-5 h-5 text-[#E50914] fill-[#E50914]" />
-                          ) : (
-                            <Circle className="w-5 h-5 hover:stroke-[#E50914]" />
-                          )}
-                        </button>
+                        {/* Direct Completion Checkbox with Daily Lock */}
+                        {isFutureDate ? (
+                          <div
+                            className="p-1 text-neutral-400 shrink-0 mt-0.5 cursor-not-allowed"
+                            title={`Locked until ${parseISODate(task.date).toLocaleDateString('en-US', { weekday: 'long' })}, ${task.date}. Only today's tasks can be completed.`}
+                          >
+                            <Lock className="w-5 h-5 text-neutral-400" />
+                          </div>
+                        ) : isPastDate ? (
+                          <div
+                            className="p-1 text-neutral-400 shrink-0 mt-0.5"
+                            title={isCompleted ? 'Completed on historical date (Read-only)' : 'Past task - Incomplete / Missed (Read-only)'}
+                          >
+                            {isCompleted ? (
+                              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                            ) : (
+                              <Circle className="w-5 h-5 text-neutral-300 stroke-dashed" />
+                            )}
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => toggleTaskStatus(task.id)}
+                            className="text-[#4B5563] hover:text-[#E50914] transition-colors shrink-0 mt-0.5 cursor-pointer"
+                            title={isCompleted ? 'Mark Pending' : 'Mark Completed'}
+                            aria-label={isCompleted ? 'Mark Pending' : 'Mark Completed'}
+                          >
+                            {isCompleted ? (
+                              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                            ) : isInProgress ? (
+                              <Play className="w-5 h-5 text-[#E50914] fill-[#E50914]" />
+                            ) : (
+                              <Circle className="w-5 h-5 hover:stroke-[#E50914]" />
+                            )}
+                          </button>
+                        )}
 
                         {/* Time Column */}
                         <div className="shrink-0 w-12 sm:w-14 text-left">
@@ -695,7 +729,26 @@ export const DailyScheduleView: React.FC = () => {
                             </span>
 
                             {/* Direct Status indicator matching prompt requirement */}
-                            {isCompleted ? (
+                            {isFutureDate ? (
+                              <span className="text-[10px] font-semibold text-neutral-600 bg-neutral-100 border border-neutral-200 px-1.5 py-0.2 rounded inline-flex items-center gap-1">
+                                <Lock className="w-2.5 h-2.5 text-neutral-500" />
+                                Upcoming · Locked until {task.date}
+                              </span>
+                            ) : isPastDate ? (
+                              isCompleted ? (
+                                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded inline-flex items-center gap-0.5">
+                                  ✓ Completed
+                                </span>
+                              ) : isSkipped ? (
+                                <span className="text-[10px] font-medium text-neutral-600 bg-neutral-100 border border-neutral-200 px-1.5 py-0.2 rounded">
+                                  ✕ Skipped
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-medium text-neutral-600 bg-neutral-100 border border-neutral-200 px-1.5 py-0.2 rounded inline-flex items-center gap-1">
+                                  ○ Incomplete / Missed
+                                </span>
+                              )
+                            ) : isCompleted ? (
                               <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded inline-flex items-center gap-0.5">
                                 ✓ Completed
                               </span>
@@ -833,103 +886,117 @@ export const DailyScheduleView: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Right Block: Task Action Buttons (Start, Complete, Skip, Reschedule, Edit) */}
+                      {/* Right Block: Task Action Buttons with Daily Lock */}
                       <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto pt-2 sm:pt-0 justify-end">
-                        {/* Specialized Meeting Conclude Action */}
-                        {task.type === 'meeting' && !isCompleted && !isSkipped && (
-                          <button
-                            onClick={() => openMeetingModal(task)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded transition-colors shadow-xs"
-                            title="Conclude Meeting & Record Decisions"
+                        {isFutureDate ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-neutral-500 bg-neutral-100 border border-neutral-200 rounded select-none cursor-not-allowed"
+                            title={`Locked until ${parseISODate(task.date).toLocaleDateString('en-US', { weekday: 'long' })}. Only today's tasks can be completed.`}
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Conclude</span>
-                          </button>
-                        )}
+                            <Lock className="w-3 h-3 text-neutral-400" />
+                            <span>Available {parseISODate(task.date).toLocaleDateString('en-US', { weekday: 'long' })}</span>
+                          </span>
+                        ) : isPastDate ? (
+                          /* Past tasks are read-only */
+                          null
+                        ) : (
+                          <>
+                            {/* Specialized Meeting Conclude Action */}
+                            {task.type === 'meeting' && !isCompleted && !isSkipped && (
+                              <button
+                                onClick={() => openMeetingModal(task)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded transition-colors shadow-xs cursor-pointer"
+                                title="Conclude Meeting & Record Decisions"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Conclude</span>
+                              </button>
+                            )}
 
-                        {/* Specialized Follow-Up Chain Action */}
-                        {task.type === 'follow_up' && !isCompleted && !isSkipped && (
-                          <button
-                            onClick={() => openFollowUpModal(task)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 rounded transition-colors shadow-xs"
-                            title="Complete & Schedule Next Follow-Up"
-                          >
-                            <ArrowRight className="w-3.5 h-3.5" />
-                            <span>Follow-up</span>
-                          </button>
-                        )}
+                            {/* Specialized Follow-Up Chain Action */}
+                            {task.type === 'follow_up' && !isCompleted && !isSkipped && (
+                              <button
+                                onClick={() => openFollowUpModal(task)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 rounded transition-colors shadow-xs cursor-pointer"
+                                title="Complete & Schedule Next Follow-Up"
+                              >
+                                <ArrowRight className="w-3.5 h-3.5" />
+                                <span>Follow-up</span>
+                              </button>
+                            )}
 
-                        {/* Cold Call / Outreach -> Schedule Meeting shortcut */}
-                        {task.type !== 'meeting' && (task.title.toLowerCase().includes('call') || task.category === 'Outreach' || task.category === 'Sales') && !isCompleted && !isSkipped && (
-                          <button
-                            onClick={() => openCreateTask(task.date, 'meeting')}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors"
-                            title="Schedule meeting resulting from this call"
-                          >
-                            <CalendarCheck className="w-3 h-3 text-blue-600" />
-                            <span className="hidden md:inline">+ Meeting</span>
-                          </button>
-                        )}
+                            {/* Cold Call / Outreach -> Schedule Meeting shortcut */}
+                            {task.type !== 'meeting' && (task.title.toLowerCase().includes('call') || task.category === 'Outreach' || task.category === 'Sales') && !isCompleted && !isSkipped && (
+                              <button
+                                onClick={() => openCreateTask(task.date, 'meeting')}
+                                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors cursor-pointer"
+                                title="Schedule meeting resulting from this call"
+                              >
+                                <CalendarCheck className="w-3 h-3 text-blue-600" />
+                                <span className="hidden md:inline">+ Meeting</span>
+                              </button>
+                            )}
 
-                        {/* 1. START TASK (Requirement 5) */}
-                        {!isCompleted && !isSkipped && (
-                          isInProgress ? (
-                            <button
-                              onClick={() => completeTask(task.id)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded transition-colors shadow-xs"
-                              title="Complete Active Task"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Complete</span>
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => startTask(task.id)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-neutral-900 bg-neutral-100 hover:bg-neutral-200 border border-neutral-300 rounded transition-colors"
-                              title="Start Task (marks active)"
-                            >
-                              <Play className="w-3 h-3 fill-neutral-900" />
-                              <span>Start</span>
-                            </button>
-                          )
-                        )}
+                            {/* 1. START TASK (Requirement 5) */}
+                            {!isCompleted && !isSkipped && (
+                              isInProgress ? (
+                                <button
+                                  onClick={() => completeTask(task.id)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded transition-colors shadow-xs cursor-pointer"
+                                  title="Complete Active Task"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Complete</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => startTask(task.id)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-neutral-900 bg-neutral-100 hover:bg-neutral-200 border border-neutral-300 rounded transition-colors cursor-pointer"
+                                  title="Start Task (marks active)"
+                                >
+                                  <Play className="w-3 h-3 fill-neutral-900" />
+                                  <span>Start</span>
+                                </button>
+                              )
+                            )}
 
-                        {/* 2. COMPLETE TASK DIRECTLY (Requirement 6) */}
-                        {!isCompleted && !isInProgress && !isSkipped && (
-                          <button
-                            onClick={() => completeTask(task.id)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-neutral-800 hover:text-emerald-700 hover:bg-emerald-50 border border-neutral-200 rounded transition-colors"
-                            title="Direct Complete"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Done</span>
-                          </button>
-                        )}
+                            {/* 2. COMPLETE TASK DIRECTLY (Requirement 6) */}
+                            {!isCompleted && !isInProgress && !isSkipped && (
+                              <button
+                                onClick={() => completeTask(task.id)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-neutral-800 hover:text-emerald-700 hover:bg-emerald-50 border border-neutral-200 rounded transition-colors cursor-pointer"
+                                title="Direct Complete"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Done</span>
+                              </button>
+                            )}
 
-                        {/* If Completed, option to reopen/uncheck */}
-                        {isCompleted && (
-                          <button
-                            onClick={() => toggleTaskStatus(task.id)}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-neutral-600 hover:text-neutral-900 border border-neutral-200 rounded"
-                            title="Reopen Task"
-                          >
-                            <RotateCcw className="w-3 h-3" />
-                            <span>Reopen</span>
-                          </button>
-                        )}
-
-                        {/* 3. SKIP TASK (Requirement 7) */}
-                        {!isCompleted && !isSkipped && (
-                          <button
-                            onClick={() => {
-                              setSkippingTaskId(task.id);
-                              setSkipReasonInput('');
-                            }}
-                            className="px-2 py-1 text-xs text-neutral-600 hover:text-neutral-900 border border-neutral-200 rounded hover:bg-neutral-50"
-                            title="Skip Task"
-                          >
-                            Skip
-                          </button>
+                            {/* If Completed, option to reopen/uncheck */}
+                            {isCompleted && (
+                              <button
+                                onClick={() => toggleTaskStatus(task.id)}
+                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-neutral-600 hover:text-neutral-900 border border-neutral-200 rounded cursor-pointer"
+                                title="Reopen Task"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Reopen</span>
+                              </button>
+                            )}
+                            {/* 3. SKIP TASK (Requirement 7 - only on active day) */}
+                            {!isCompleted && !isSkipped && (
+                              <button
+                                onClick={() => {
+                                  setSkippingTaskId(task.id);
+                                  setSkipReasonInput('');
+                                }}
+                                className="px-2 py-1 text-xs text-neutral-600 hover:text-neutral-900 border border-neutral-200 rounded hover:bg-neutral-50"
+                                title="Skip Task"
+                              >
+                                Skip
+                              </button>
+                            )}
+                          </>
                         )}
 
                         {/* 4. RESCHEDULE TASK (Requirement 8) */}
@@ -1016,16 +1083,39 @@ export const DailyScheduleView: React.FC = () => {
                   className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-neutral-50/70 transition-colors"
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <button
-                      onClick={() => toggleTaskStatus(t.id)}
-                      className="text-[#4B5563] hover:text-[#E50914] shrink-0 cursor-pointer"
-                    >
-                      {isDone ? (
-                        <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />
-                      ) : (
-                        <Circle className="w-4.5 h-4.5 hover:stroke-[#E50914]" />
-                      )}
-                    </button>
+                    {/* Completion Checkbox with Daily Lock */}
+                    {isFutureDate ? (
+                      <div
+                        className="text-neutral-400 shrink-0 cursor-not-allowed"
+                        title={`Locked until ${parseISODate(t.date).toLocaleDateString('en-US', { weekday: 'long' })}, ${t.date}. Only today's tasks can be completed.`}
+                      >
+                        <Lock className="w-4.5 h-4.5 text-neutral-400" />
+                      </div>
+                    ) : isPastDate ? (
+                      <div
+                        className="shrink-0 text-neutral-400"
+                        title={isDone ? 'Completed' : 'Historical - Incomplete'}
+                      >
+                        {isDone ? (
+                          <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />
+                        ) : (
+                          <Circle className="w-4.5 h-4.5 text-neutral-300 stroke-dashed" />
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => toggleTaskStatus(t.id)}
+                        className="text-[#4B5563] hover:text-[#E50914] shrink-0 cursor-pointer"
+                        title={isDone ? 'Mark Pending' : 'Mark Completed'}
+                        aria-label={isDone ? 'Mark Pending' : 'Mark Completed'}
+                      >
+                        {isDone ? (
+                          <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />
+                        ) : (
+                          <Circle className="w-4.5 h-4.5 hover:stroke-[#E50914]" />
+                        )}
+                      </button>
+                    )}
 
                     <div className="flex-1 min-w-0">
                       <span
@@ -1036,6 +1126,12 @@ export const DailyScheduleView: React.FC = () => {
                         {t.title}
                       </span>
                       <div className="flex items-center gap-2 text-[11px] text-[#4B5563] mt-0.5 flex-wrap">
+                        {isFutureDate && (
+                          <span className="text-[10px] font-semibold text-neutral-600 bg-neutral-100 border border-neutral-200 px-1.5 py-0.2 rounded inline-flex items-center gap-1">
+                            <Lock className="w-2.5 h-2.5 text-neutral-500" />
+                            Upcoming
+                          </span>
+                        )}
                         <span className="capitalize">{t.type.replace('_', ' ')}</span>
                         <span>·</span>
                         <span>{t.category}</span>
@@ -1047,7 +1143,7 @@ export const DailyScheduleView: React.FC = () => {
 
                   {/* Assign Time or Reschedule */}
                   <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto shrink-0 justify-end">
-                    {t.type === 'meeting' && !isDone && (
+                    {!isFutureDate && !isPastDate && t.type === 'meeting' && !isDone && (
                       <button
                         onClick={() => openMeetingModal(t)}
                         className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded transition-colors shadow-xs cursor-pointer"
@@ -1058,7 +1154,7 @@ export const DailyScheduleView: React.FC = () => {
                       </button>
                     )}
 
-                    {t.type === 'follow_up' && !isDone && (
+                    {!isFutureDate && !isPastDate && t.type === 'follow_up' && !isDone && (
                       <button
                         onClick={() => openFollowUpModal(t)}
                         className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-white bg-amber-700 hover:bg-amber-800 rounded transition-colors shadow-xs cursor-pointer"
@@ -1067,6 +1163,13 @@ export const DailyScheduleView: React.FC = () => {
                         <ArrowRight className="w-3 h-3" />
                         <span>Follow-up</span>
                       </button>
+                    )}
+
+                    {isFutureDate && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-neutral-500 bg-neutral-100 border border-neutral-200 rounded select-none">
+                        <Lock className="w-3 h-3 text-neutral-400" />
+                        <span>Available {parseISODate(t.date).toLocaleDateString('en-US', { weekday: 'long' })}</span>
+                      </span>
                     )}
 
                     <button

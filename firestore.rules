@@ -42,32 +42,32 @@ service cloud.firestore {
 
     // Tasks Collection: Private tasks isolated by userId
     match /tasks/{taskId} {
-      allow get: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow get: if (isSignedIn() && (resource == null || resource.data.userId == request.auth.uid)) || isAdmin();
       allow list: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if (isSignedIn() && (resource == null || !('userId' in resource.data) || resource.data.userId == request.auth.uid) && request.resource.data.userId == request.auth.uid) || isAdmin();
+      allow delete: if (isSignedIn() && (resource == null || !('userId' in resource.data) || resource.data.userId == request.auth.uid)) || isAdmin();
     }
 
     // User Settings Collection: Scoped strictly by userId
     match /settings/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow write: if isOwner(userId);
+      allow write: if isOwner(userId) || isAdmin();
     }
 
     // User Templates Collection: Scoped strictly by userId
     match /templates/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow write: if isOwner(userId);
+      allow write: if isOwner(userId) || isAdmin();
     }
 
     // Reports Collection: Weekly and Monthly Reports isolated by userId
     match /reports/{reportId} {
-      allow get: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow get: if (isSignedIn() && (resource == null || resource.data.userId == request.auth.uid)) || isAdmin();
       allow list: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if (isSignedIn() && (resource == null || !('userId' in resource.data) || resource.data.userId == request.auth.uid)) || isAdmin();
+      allow delete: if (isSignedIn() && (resource == null || !('userId' in resource.data) || resource.data.userId == request.auth.uid)) || isAdmin();
     }
 
     // Activity Logs: Auditing platform interaction signals

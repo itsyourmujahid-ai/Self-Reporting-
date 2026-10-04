@@ -151,3 +151,41 @@ adminRouter.get('/audit-logs', (req: AuthenticatedRequest, res: Response): void 
     res.status(500).json({ error: 'Failed to retrieve activity logs.' });
   }
 });
+
+// Production Database Backup (Requirement 31)
+adminRouter.get('/backup', (req: AuthenticatedRequest, res: Response): void => {
+  try {
+    const users = db.prepare('SELECT id, email, display_name, role, status, created_at, last_activity_at FROM users').all();
+    const settings = db.prepare('SELECT user_id, settings_json, updated_at FROM user_settings').all();
+    const templates = db.prepare('SELECT user_id, templates_json, updated_at FROM user_templates').all();
+    const tasks = db.prepare('SELECT * FROM tasks').all();
+    const reports = db.prepare('SELECT * FROM reports').all();
+    const activityLogs = db.prepare('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 500').all();
+
+    const backupPayload = {
+      backupTimestamp: new Date().toISOString(),
+      version: '1.0.0-production',
+      totalRecords: {
+        users: users.length,
+        tasks: tasks.length,
+        reports: reports.length,
+        activityLogs: activityLogs.length,
+      },
+      data: {
+        users,
+        settings,
+        templates,
+        tasks,
+        reports,
+        activityLogs,
+      },
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="self-reporting-prod-backup-${new Date().toISOString().slice(0, 10)}.json"`);
+    res.json(backupPayload);
+  } catch (error) {
+    console.error('Database backup error:', error);
+    res.status(500).json({ error: 'Failed to create database backup snapshot.' });
+  }
+});

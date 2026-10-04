@@ -51,9 +51,9 @@ export const DashboardView: React.FC = () => {
   // Today's task list in chronological order
   const todayTaskList = useMemo(() => {
     return tasks
-      .filter(t => t.date === todayISO)
+      .filter(t => t.date === todayISO && (!settings.startDate || t.date >= settings.startDate))
       .sort((a, b) => (a.startTime || '99:99').localeCompare(b.startTime || '99:99'));
-  }, [tasks, todayISO]);
+  }, [tasks, todayISO, settings.startDate]);
 
   // Current or Next immediate task
   const currentOrNextTask = useMemo(() => {

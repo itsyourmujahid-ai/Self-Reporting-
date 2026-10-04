@@ -5,6 +5,7 @@ import {
   updateAdminUserStatus,
   fetchAdminAuditLogs,
 } from '../../services/firestoreService';
+import { getStoredToken } from '../../utils/storage';
 import {
   Users,
   UserCheck,
@@ -22,6 +23,7 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
+  Database,
 } from 'lucide-react';
 import { formatDisplayDate } from '../../utils/dateUtils';
 
@@ -138,6 +140,33 @@ export const AdminDashboardView: React.FC = () => {
     setTimeout(() => setCopiedEmails(false), 2000);
   };
 
+  const [downloadingBackup, setDownloadingBackup] = useState(false);
+  const handleDownloadBackup = async () => {
+    setDownloadingBackup(true);
+    try {
+      const token = getStoredToken();
+      const res = await fetch('/api/admin/backup', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Database backup export failed.');
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `self-reporting-prod-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      console.error('Backup error:', e);
+      alert(e.message || 'Failed to download production database backup.');
+    } finally {
+      setDownloadingBackup(false);
+    }
+  };
+
   const filteredUsers = users.filter(u => {
     const matchesSearch =
       u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -189,6 +218,15 @@ export const AdminDashboardView: React.FC = () => {
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>Export CSV</span>
+          </button>
+          <button
+            onClick={handleDownloadBackup}
+            disabled={downloadingBackup}
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-[#E50914] hover:bg-[#c80812] rounded-md transition-colors cursor-pointer disabled:opacity-50"
+            title="Download full production database snapshot"
+          >
+            <Database className={`w-3.5 h-3.5 ${downloadingBackup ? 'animate-spin' : ''}`} />
+            <span>{downloadingBackup ? 'Backing Up...' : 'DB Backup'}</span>
           </button>
         </div>
       </div>

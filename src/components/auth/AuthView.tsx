@@ -23,31 +23,57 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthenticated }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Hidden Super Admin State
+  // Hidden Admin & Owner State
   const [showHiddenAdmin, setShowHiddenAdmin] = useState(false);
+  const [hiddenFlowType, setHiddenFlowType] = useState<'admin' | 'owner'>('admin');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [adminError, setAdminError] = useState<string | null>(null);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminAccountPrepared, setAdminAccountPrepared] = useState(false);
 
-  // First Hidden Shortcut: CTRL + LEFT CLICK on the login page opens hidden flow
+  // Hidden Shortcut 1: CTRL + LEFT CLICK on the login page opens hidden Super Admin flow
   const handlePageClick = (e: React.MouseEvent) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
+      setHiddenFlowType('admin');
       setShowHiddenAdmin(prev => !prev);
       setError(null);
       setAdminError(null);
     }
   };
 
-  // Second Hidden Shortcut: CTRL + LEFT CLICK inside hidden flow prepares admin account identifier
+  // Hidden Shortcut 2: CTRL + RIGHT CLICK on the login page opens hidden Personal Owner flow
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      setHiddenFlowType('owner');
+      setShowHiddenAdmin(true);
+      setError(null);
+      setAdminError(null);
+    }
+  };
+
+  // Second Hidden Shortcut (Left Click inside modal): Prepares Super Admin account identifier (admin@zaynhub.com)
   const handleHiddenAdminClick = (e: React.MouseEvent) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
-      // Prepares the Super Admin account identifier (NO passwords exposed!)
+      setHiddenFlowType('admin');
+      setAdminEmail('admin@zaynhub.com');
+      setAdminAccountPrepared(true);
+      setAdminError(null);
+    }
+  };
+
+  // Second Hidden Shortcut (Right Click inside modal): Prepares Personal Owner account identifier (itsyourmujahid@gmail.com)
+  const handleHiddenOwnerContextMenu = (e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      setHiddenFlowType('owner');
       setAdminEmail('itsyourmujahid@gmail.com');
       setAdminAccountPrepared(true);
       setAdminError(null);
@@ -208,6 +234,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthenticated }) => {
   return (
     <div
       onClick={handlePageClick}
+      onContextMenu={handleContextMenu}
       className="min-h-screen bg-[#F3F4F6] flex flex-col justify-center py-12 sm:px-6 lg:px-8 selection:bg-[#E50914]/20 selection:text-[#E50914] select-none"
     >
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
@@ -399,6 +426,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthenticated }) => {
               e.stopPropagation();
               handleHiddenAdminClick(e);
             }}
+            onContextMenu={e => {
+              e.stopPropagation();
+              handleHiddenOwnerContextMenu(e);
+            }}
             className="bg-[#111111] border border-[#2E2E2E] rounded-2xl max-w-md w-full p-6 text-white shadow-2xl relative"
           >
             {/* Close Button */}
@@ -413,11 +444,13 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthenticated }) => {
             <div className="flex items-center gap-2 mb-1">
               <Shield className="w-5 h-5 text-[#E50914]" />
               <h3 className="text-base font-bold tracking-tight text-white">
-                Super Admin Authorization
+                {hiddenFlowType === 'owner' ? 'Personal Owner Authorization' : 'Super Admin Authorization'}
               </h3>
             </div>
             <p className="text-xs text-neutral-400 mb-6">
-              Owner identity gateway. Access verified through Firebase database security rules.
+              {hiddenFlowType === 'owner'
+                ? 'Personal workspace owner gateway. Authenticate with owner credentials or Google.'
+                : 'Owner identity gateway. Access verified through Firebase database security rules.'}
             </p>
 
             {adminAccountPrepared && (
@@ -425,7 +458,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onAuthenticated }) => {
                 <span className="font-mono text-[11px] text-[#E50914]">
                   Target: {adminEmail}
                 </span>
-                <span className="text-[10px] text-neutral-400">Owner Identifier Ready</span>
+                <span className="text-[10px] text-neutral-400">
+                  {hiddenFlowType === 'owner' ? 'Personal Owner Identifier Ready' : 'Super Admin Identifier Ready'}
+                </span>
               </div>
             )}
 

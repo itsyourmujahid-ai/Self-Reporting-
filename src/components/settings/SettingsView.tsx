@@ -30,6 +30,7 @@ export const SettingsView: React.FC = () => {
     resetAll,
     tasks,
     deleteTask,
+    startFromToday,
   } = useWorkPlan();
 
   // Local state for settings form
@@ -43,6 +44,11 @@ export const SettingsView: React.FC = () => {
   // Category and project inputs
   const [newCategory, setNewCategory] = useState('');
   const [newProject, setNewProject] = useState('');
+
+  // Start From Today states
+  const [isStartFromTodayModalOpen, setIsStartFromTodayModalOpen] = useState(false);
+  const [isStartingFromToday, setIsStartingFromToday] = useState(false);
+  const [startFromTodayMessage, setStartFromTodayMessage] = useState<string | null>(null);
 
   // Template modal / edit state
   const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null);
@@ -101,6 +107,20 @@ export const SettingsView: React.FC = () => {
   const handleCancelConflict = () => {
     setConflictDayIndex(null);
     setConflictTasks([]);
+  };
+
+  const handleExecuteStartFromToday = async () => {
+    setIsStartingFromToday(true);
+    try {
+      const res = await startFromToday();
+      setStartFromTodayMessage(res.message);
+      setIsStartFromTodayModalOpen(false);
+      setTimeout(() => setStartFromTodayMessage(null), 8000);
+    } catch (err: any) {
+      setStartFromTodayMessage(err?.message || 'Failed to start from today.');
+    } finally {
+      setIsStartingFromToday(false);
+    }
   };
 
   const handleSaveSettings = (e: React.FormEvent) => {
@@ -606,7 +626,61 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Section 4: Data Backup & Reset */}
+      {/* Section 4: Start From Today */}
+      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 space-y-4 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#E50914]" />
+              <h2 className="text-sm sm:text-base font-bold text-[#111111]">
+                Start From Today
+              </h2>
+            </div>
+            <p className="text-xs text-[#4B5563]">
+              Start your personal reporting from today and remove all previous task history.
+            </p>
+            {settings.startDate && (
+              <p className="text-[11px] font-mono text-neutral-600 bg-neutral-100 px-2 py-0.5 rounded inline-block">
+                Active reporting cycle started: <span className="font-bold text-[#111111]">{settings.startDate}</span>
+              </p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsStartFromTodayModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-white bg-[#E50914] hover:bg-[#c40812] active:scale-[0.98] rounded-md transition-all shadow-xs cursor-pointer shrink-0"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Start From Today</span>
+          </button>
+        </div>
+
+        <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-3 text-xs text-neutral-700 space-y-1.5">
+          <p className="font-semibold text-neutral-900">What "Start From Today" does:</p>
+          <ul className="list-disc list-inside space-y-1 text-[11px] text-neutral-600 pl-1">
+            <li>Today becomes your first active execution and reporting day.</li>
+            <li>Previous task execution history, completed tasks, overdue items, and old reporting data before today are removed from active tracking.</li>
+            <li>All your settings, recurring routine templates, weekly working/off days, categories, and account configuration remain preserved.</li>
+            <li>Valid future scheduled tasks and routine instances from today onwards continue seamlessly.</li>
+          </ul>
+        </div>
+
+        {startFromTodayMessage && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-md text-xs font-medium flex items-center justify-between">
+            <span>{startFromTodayMessage}</span>
+            <button
+              type="button"
+              onClick={() => setStartFromTodayMessage(null)}
+              className="text-emerald-600 hover:text-emerald-900 cursor-pointer ml-2"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Section 5: Data Backup & Reset */}
       <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 sm:p-6 space-y-4 shadow-xs">
         <div>
           <h2 className="text-sm font-bold text-[#111111]">
@@ -1026,6 +1100,58 @@ export const SettingsView: React.FC = () => {
                 className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-md shadow-xs transition-all cursor-pointer"
               >
                 Remove {conflictTasks.length} Task(s) & Set OFF DAY
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Start From Today Confirmation Dialog */}
+      {isStartFromTodayModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/50 backdrop-blur-xs">
+          <div className="relative w-full max-w-md bg-white rounded-xl shadow-2xl border border-[#E5E7EB] p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-2.5 text-[#111111]">
+              <div className="p-2 rounded-full bg-rose-50 text-[#E50914]">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-bold text-[#111111]">
+                Start From Today?
+              </h3>
+            </div>
+
+            <p className="text-xs text-[#4B5563] leading-relaxed">
+              This will remove your previous task history, including completed and pending tasks, and start your reporting from today.
+            </p>
+
+            <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-md text-xs text-neutral-700 space-y-1">
+              <span className="font-semibold text-neutral-900 block">Please Note:</span>
+              <p className="text-[11px] text-neutral-600">
+                Previous task history will be removed from your active reporting cycle. Your settings and recurring task templates will remain.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isStartingFromToday}
+                onClick={() => setIsStartFromTodayModalOpen(false)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100 rounded-md transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isStartingFromToday}
+                onClick={handleExecuteStartFromToday}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-[#E50914] hover:bg-[#c40812] rounded-md transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                {isStartingFromToday ? (
+                  <>
+                    <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <span>Start From Today</span>
+                )}
               </button>
             </div>
           </div>

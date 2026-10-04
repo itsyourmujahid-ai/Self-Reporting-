@@ -30,6 +30,7 @@ import {
   Grid,
   X,
   Coffee,
+  Lock,
 } from 'lucide-react';
 import { Task, TaskPriority, TaskStatus, TaskType } from '../../types';
 
@@ -552,6 +553,8 @@ export const MonthlyCalendarView: React.FC = () => {
               ) : (
                 inspectedDayTasks.map(t => {
                   const isDone = t.status === 'completed';
+                  const isInspectFuture = inspectDate ? inspectDate > todayISO : false;
+                  const isInspectPast = inspectDate ? inspectDate < todayISO : false;
 
                   return (
                     <div
@@ -564,18 +567,38 @@ export const MonthlyCalendarView: React.FC = () => {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                          {/* 1-click status toggle */}
-                          <button
-                            onClick={() => toggleTaskStatus(t.id)}
-                            className="text-neutral-400 hover:text-neutral-900 shrink-0"
-                            title={isDone ? 'Mark Pending' : 'Mark Completed'}
-                          >
-                            {isDone ? (
-                              <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />
-                            ) : (
-                              <Circle className="w-4.5 h-4.5 hover:stroke-neutral-800" />
-                            )}
-                          </button>
+                          {/* Completion button with Daily Lock */}
+                          {isInspectFuture ? (
+                            <div
+                              className="text-neutral-400 shrink-0 cursor-not-allowed"
+                              title={`Locked until ${inspectDate}. Only today's tasks can be completed.`}
+                            >
+                              <Lock className="w-4.5 h-4.5 text-neutral-400" />
+                            </div>
+                          ) : isInspectPast ? (
+                            <div
+                              className="shrink-0 text-neutral-400"
+                              title={isDone ? 'Completed' : 'Historical task (Read-only)'}
+                            >
+                              {isDone ? (
+                                <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />
+                              ) : (
+                                <Circle className="w-4.5 h-4.5 text-neutral-300 stroke-dashed" />
+                              )}
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => toggleTaskStatus(t.id)}
+                              className="text-neutral-400 hover:text-neutral-900 shrink-0 cursor-pointer"
+                              title={isDone ? 'Mark Pending' : 'Mark Completed'}
+                            >
+                              {isDone ? (
+                                <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />
+                              ) : (
+                                <Circle className="w-4.5 h-4.5 hover:stroke-neutral-800" />
+                              )}
+                            </button>
+                          )}
 
                           {/* Time */}
                           <span className="font-mono text-[11px] text-neutral-500 shrink-0 tabular-nums">
@@ -594,13 +617,20 @@ export const MonthlyCalendarView: React.FC = () => {
 
                         {/* Actions */}
                         <div className="flex items-center gap-1 shrink-0">
-                          {t.type === 'meeting' && !isDone && (
+                          {isInspectFuture && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-neutral-500 font-medium bg-neutral-100 px-1.5 py-0.5 rounded select-none">
+                              <Lock className="w-2.5 h-2.5 text-neutral-400" />
+                              <span>Upcoming</span>
+                            </span>
+                          )}
+
+                          {!isInspectFuture && !isInspectPast && t.type === 'meeting' && !isDone && (
                             <button
                               onClick={() => {
                                 setInspectDate(null);
                                 openMeetingModal(t);
                               }}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded shadow-xs"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded shadow-xs cursor-pointer"
                               title="Conclude Meeting"
                             >
                               <CheckCircle2 className="w-3 h-3" />
@@ -608,13 +638,13 @@ export const MonthlyCalendarView: React.FC = () => {
                             </button>
                           )}
 
-                          {t.type === 'follow_up' && !isDone && (
+                          {!isInspectFuture && !isInspectPast && t.type === 'follow_up' && !isDone && (
                             <button
                               onClick={() => {
                                 setInspectDate(null);
                                 openFollowUpModal(t);
                               }}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-white bg-amber-700 hover:bg-amber-800 rounded shadow-xs"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-white bg-amber-700 hover:bg-amber-800 rounded shadow-xs cursor-pointer"
                               title="Complete & Schedule Next Follow-up"
                             >
                               <ArrowRight className="w-3 h-3" />

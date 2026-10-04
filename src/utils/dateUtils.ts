@@ -278,3 +278,37 @@ export function getRecurringTaskId(
   return `task_${safeUid}_${safeTmpl}_${dateISO}${timePart}`;
 }
 
+export type DayActionability = 'past' | 'today' | 'future' | 'off_day';
+
+/**
+ * Evaluates the actionability of a task based on strict daily lock rules:
+ * - PAST: Read-only
+ * - TODAY: Actionable (can be completed, started, edited)
+ * - FUTURE: Visible but Locked (cannot be completed early)
+ * - OFF DAY: Zero tasks / not actionable
+ */
+export function getTaskActionability(
+  taskDate: string,
+  todayISO: string = getTodayISO(),
+  isOffDay: boolean = false
+): DayActionability {
+  if (isOffDay) return 'off_day';
+  if (taskDate === todayISO) return 'today';
+  if (taskDate > todayISO) return 'future';
+  return 'past';
+}
+
+/**
+ * Returns user-facing lock label for future or past tasks
+ */
+export function getTaskLockLabel(taskDate: string, todayISO: string = getTodayISO()): string {
+  if (taskDate === todayISO) return 'Actionable today';
+  if (taskDate > todayISO) {
+    const d = parseISODate(taskDate);
+    const dayName = DAY_NAMES[d.getDay()];
+    const shortDate = formatShortDate(taskDate);
+    return `Locked until ${dayName} (${shortDate})`;
+  }
+  return 'Past task (Read-only)';
+}
+

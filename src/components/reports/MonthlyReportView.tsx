@@ -55,8 +55,10 @@ export const MonthlyReportView: React.FC = () => {
   // Tasks belonging to this month
   const monthPrefix = `${activeMonth}-`;
   const monthTasks = useMemo(() => {
-    return tasks.filter(t => t.date.startsWith(monthPrefix));
-  }, [tasks, monthPrefix]);
+    return tasks.filter(
+      t => t.date.startsWith(monthPrefix) && (!settings.startDate || t.date >= settings.startDate)
+    );
+  }, [tasks, monthPrefix, settings.startDate]);
 
   // Aggregate quantitative metrics (Requirement 12)
   const totalTasks = monthTasks.length;

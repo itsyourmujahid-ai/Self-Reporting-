@@ -58,6 +58,7 @@
       "properties": {
         "userId": { "type": "string" },
         "userName": { "type": "string" },
+        "startDate": { "type": "string" },
         "weeklyOffDays": { "type": "array" },
         "workingDays": { "type": "array" },
         "workDayStart": { "type": "string" },

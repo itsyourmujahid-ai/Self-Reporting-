@@ -74,6 +74,11 @@ export function generateTemplateTasksForDate(
     return [];
   }
 
+  // START FROM TODAY: Do not generate tasks prior to persistent cycle startDate
+  if (settings.startDate && dateISO < settings.startDate) {
+    return [];
+  }
+
   const [year, month, day] = dateISO.split('-').map(Number);
   const dateObj = parseISODate(dateISO);
   const dayOfWeek = dateObj.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
@@ -232,8 +237,15 @@ export function synchronizeTasksWithTemplates(
   const existingByTemplateAndDate = new Map<string, Task>();
   const nonRecurringTasks: Task[] = [];
   const recurringOutsideScope: Task[] = [];
+  const tasksRemoved: Task[] = [];
 
   for (const task of existingTasks) {
+    // START FROM TODAY: Exclude any previous tasks before startDate from active scope
+    if (settings.startDate && task.date < settings.startDate) {
+      tasksRemoved.push(task);
+      continue;
+    }
+
     const isRecurring = task.type === 'recurring' && Boolean(task.templateId);
     const taskMonth = task.date ? task.date.slice(0, 7) : '';
 
@@ -275,7 +287,6 @@ export function synchronizeTasksWithTemplates(
   const synchronizedRecurringTasks: Task[] = [];
   const newTasksCreated: Task[] = [];
   const tasksUpdated: Task[] = [];
-  const tasksRemoved: Task[] = [];
   const oldIdsToCleanup: string[] = [];
 
   const matchedExistingIds = new Set<string>();

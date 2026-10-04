@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useWorkPlan } from '../../context/WorkPlanContext';
 import { TaskType, TaskStatus, TaskPriority } from '../../types';
 import { X, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
-import { addMinutesToTime } from '../../utils/dateUtils';
+import { addMinutesToTime, getTodayISO } from '../../utils/dateUtils';
 
 export const TaskModal: React.FC = () => {
   const {
@@ -105,6 +105,18 @@ export const TaskModal: React.FC = () => {
 
     const finalStartTime = isUnscheduled ? undefined : startTime;
     const endTime = finalStartTime ? addMinutesToTime(finalStartTime, durationMinutes) : undefined;
+    const todayISO = getTodayISO();
+
+    let finalStatus = status;
+    // STRICT DAILY TASK COMPLETION LOCK RULE:
+    // Future and past tasks cannot be transitioned to 'completed'
+    if (finalStatus === 'completed' && date !== todayISO) {
+      if (editingTask && editingTask.status === 'completed' && editingTask.date === date) {
+        finalStatus = 'completed';
+      } else {
+        finalStatus = editingTask ? editingTask.status : 'planned';
+      }
+    }
 
     const taskPayload = {
       title: title.trim(),
@@ -113,7 +125,7 @@ export const TaskModal: React.FC = () => {
       startTime: finalStartTime,
       endTime,
       durationMinutes,
-      status,
+      status: finalStatus,
       priority,
       category,
       project: project.trim() || undefined,
@@ -383,11 +395,21 @@ export const TaskModal: React.FC = () => {
                       className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded-md bg-white text-[#111111] focus:outline-hidden focus:border-[#E50914]"
                     >
                       <option value="planned">Planned</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="completed">Completed</option>
+                      <option value="in_progress" disabled={date !== getTodayISO()}>In Progress {date !== getTodayISO() ? '(Today only)' : ''}</option>
+                      <option
+                        value="completed"
+                        disabled={date !== getTodayISO() && (!editingTask || editingTask.status !== 'completed')}
+                      >
+                        Completed {date !== getTodayISO() && (!editingTask || editingTask.status !== 'completed') ? '(Locked until date)' : ''}
+                      </option>
                       <option value="skipped">Skipped</option>
                       <option value="rescheduled">Rescheduled</option>
                     </select>
+                    {date !== getTodayISO() && (
+                      <p className="text-[10px] text-amber-700 mt-1 font-medium">
+                        Daily Lock: Tasks can only be completed on today ({getTodayISO()}).
+                      </p>
+                    )}
                   </div>
 
                   <div>

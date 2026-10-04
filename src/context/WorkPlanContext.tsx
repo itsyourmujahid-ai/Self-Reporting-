@@ -169,6 +169,8 @@ interface WorkPlanContextType {
   addTemplate: (template: Omit<TaskTemplate, 'id'>) => void;
   deleteTemplate: (id: string) => void;
   updateSettings: (newSettings: Partial<UserSettings>) => void;
+  startFromToday: () => Promise<{ success: boolean; message: string }>;
+  isTaskActionable: (task: Task) => boolean;
 
   // Reports
   saveWeeklyReflection: (weekId: string, startDate: string, endDate: string, reflection: WeeklyReflection) => void;
@@ -553,8 +555,17 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (isDateOffDay(taskData.date)) {
       throw new Error('This is an OFF DAY. Tasks cannot be scheduled on this date.');
     }
+    const today = getTodayISO();
+    let initialStatus = taskData.status || 'planned';
+    // STRICT DAILY TASK COMPLETION LOCK: Cannot create tasks as completed if not today
+    if (initialStatus === 'completed' && taskData.date !== today) {
+      initialStatus = 'planned';
+    }
+
     const newTask: Task = {
       ...taskData,
+      status: initialStatus,
+      completedAt: initialStatus === 'completed' ? new Date().toISOString() : undefined,
       id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       createdAt: new Date().toISOString(),
     };
@@ -565,11 +576,38 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return newTask;
   }, [isDateOffDay, user?.id]);
 
+  const isTaskActionable = useCallback(
+    (task: Task): boolean => {
+      const today = getTodayISO();
+      if (isDateOffDay(task.date)) return false;
+      return task.date === today;
+    },
+    [isDateOffDay]
+  );
+
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
+    const today = getTodayISO();
     if (updates.date && isDateOffDay(updates.date)) {
       throw new Error('This is an OFF DAY. Tasks cannot be scheduled on this date.');
     }
     setTasksState(prev => {
+      const currentTask = prev.find(t => t.id === id);
+      if (!currentTask) return prev;
+      const targetDate = updates.date || currentTask.date;
+
+      // STRICT DAILY TASK COMPLETION LOCK RULE:
+      // PAST = READ ONLY, TODAY = ACTIONABLE, FUTURE = LOCKED, OFF DAY = ZERO TASKS
+      if (updates.status === 'completed' && targetDate !== today) {
+        if (targetDate > today) {
+          throw new Error(`Daily Lock: Task is scheduled for future date (${targetDate}) and cannot be completed today.`);
+        } else {
+          throw new Error(`Daily Lock: Task is from past date (${targetDate}) and cannot be retroactively completed.`);
+        }
+      }
+      if (updates.status === 'completed' && isDateOffDay(targetDate)) {
+        throw new Error('OFF DAY: No tasks can be completed on configured rest days.');
+      }
+
       let targetDoc: Task | null = null;
       const nextList = prev.map(task => {
         if (task.id === id) {
@@ -599,33 +637,60 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [user?.id]);
 
   const toggleTaskStatus = useCallback((id: string, explicitStatus?: TaskStatus) => {
+    const today = getTodayISO();
     setTasksState(prev => {
-      let targetDoc: Task | null = null;
-      const nextList = prev.map(task => {
-        if (task.id !== id) return task;
-        let newStatus: TaskStatus;
-        if (explicitStatus) {
-          newStatus = explicitStatus;
+      const target = prev.find(t => t.id === id);
+      if (!target) return prev;
+
+      // STRICT DAILY TASK COMPLETION LOCK RULE:
+      // PAST = READ ONLY, TODAY = ACTIONABLE, FUTURE = LOCKED, OFF DAY = ZERO TASKS
+      if (target.date !== today) {
+        if (target.date > today) {
+          throw new Error(`Daily Lock: This task is scheduled for future date (${target.date}) and cannot be completed today.`);
         } else {
-          newStatus = task.status === 'completed' ? 'planned' : 'completed';
+          throw new Error(`Daily Lock: This task is from past date (${target.date}) and cannot be retroactively completed.`);
         }
-        const updated = {
-          ...task,
-          status: newStatus,
-          completedAt: newStatus === 'completed' ? new Date().toISOString() : undefined,
-        };
-        targetDoc = updated;
-        return updated;
-      });
-      if (targetDoc && user?.id) {
-        saveTaskDoc(user.id, targetDoc);
       }
-      return nextList;
+      if (isDateOffDay(target.date)) {
+        throw new Error('OFF DAY: No tasks can be completed on configured rest days.');
+      }
+
+      let newStatus: TaskStatus;
+      if (explicitStatus) {
+        newStatus = explicitStatus;
+      } else {
+        newStatus = target.status === 'completed' ? 'planned' : 'completed';
+      }
+      const updated = {
+        ...target,
+        status: newStatus,
+        completedAt: newStatus === 'completed' ? new Date().toISOString() : undefined,
+      };
+      if (user?.id) {
+        saveTaskDoc(user.id, updated);
+      }
+      return prev.map(t => (t.id === id ? updated : t));
     });
-  }, [user?.id]);
+  }, [user?.id, isDateOffDay]);
 
   const startTask = useCallback((id: string) => {
+    const today = getTodayISO();
     setTasksState(prev => {
+      const target = prev.find(t => t.id === id);
+      if (!target) return prev;
+
+      // STRICT DAILY TASK COMPLETION LOCK RULE
+      if (target.date !== today) {
+        if (target.date > today) {
+          throw new Error(`Daily Lock: Future task cannot be started until ${target.date}.`);
+        } else {
+          throw new Error(`Daily Lock: Past task cannot be started.`);
+        }
+      }
+      if (isDateOffDay(target.date)) {
+        throw new Error('OFF DAY: Cannot start tasks on configured rest days.');
+      }
+
       let targetDoc: Task | null = null;
       const nextList = prev.map(task => {
         if (task.status === 'in_progress' && task.id !== id) {
@@ -649,11 +714,88 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       return nextList;
     });
-  }, [user?.id]);
+  }, [user?.id, isDateOffDay]);
 
   const completeTask = useCallback((id: string) => {
     updateTask(id, { status: 'completed' });
   }, [updateTask]);
+
+  const startFromToday = useCallback(async (): Promise<{ success: boolean; message: string }> => {
+    const today = getTodayISO();
+    const currentStartDate = settings.startDate;
+    const hasTasksBeforeToday = tasks.some(t => t.date < today);
+
+    // Idempotency: if already active from today and no tasks exist before today
+    if (currentStartDate === today && !hasTasksBeforeToday) {
+      return {
+        success: true,
+        message: `Your reporting cycle is already active from today (${today}).`,
+      };
+    }
+
+    // 1. Identify previous tasks to purge from active history
+    const tasksBeforeToday = tasks.filter(t => t.date < today);
+    const validFutureAndTodayTasks = tasks.filter(t => t.date >= today);
+    const oldTaskIds = tasksBeforeToday.map(t => t.id);
+
+    // 2. Updated settings with persistent startDate
+    const updatedSettings: UserSettings = {
+      ...settings,
+      startDate: today,
+    };
+
+    // 3. Re-synchronize remaining tasks from today onwards
+    const syncResult = synchronizeTasksWithTemplates(
+      validFutureAndTodayTasks,
+      templates,
+      updatedSettings,
+      [today.slice(0, 7)],
+      user?.id
+    );
+
+    // 4. Update local states
+    setSettingsState(updatedSettings);
+    setTasksState(syncResult.synchronizedTasks);
+    // Prune previous reports before today
+    setWeeklyReportsState(prev => prev.filter(r => r.endDate >= today));
+    setMonthlyReportsState(prev => prev.filter(r => r.monthIdentifier >= today.slice(0, 7)));
+
+    // 5. Persist to Firestore
+    if (user?.id) {
+      saveSettingsDoc(user.id, updatedSettings).catch(console.warn);
+      if (oldTaskIds.length > 0) {
+        batchDeleteTasksDocs(user.id, oldTaskIds).catch(console.warn);
+      }
+      if (syncResult.newTasksCreated.length > 0) {
+        batchSaveTasksDocs(user.id, syncResult.newTasksCreated).catch(console.warn);
+      }
+      if (syncResult.tasksUpdated.length > 0) {
+        batchSaveTasksDocs(user.id, syncResult.tasksUpdated).catch(console.warn);
+      }
+      if (syncResult.oldIdsToCleanup && syncResult.oldIdsToCleanup.length > 0) {
+        batchDeleteTasksDocs(user.id, syncResult.oldIdsToCleanup).catch(console.warn);
+      }
+    }
+
+    // 6. Notify server backend route
+    try {
+      await fetch('/api/data/start-from-today', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ startDate: today }),
+      });
+    } catch (e) {
+      console.warn('Backend start-from-today sync warning:', e);
+    }
+
+    return {
+      success: true,
+      message: `Your reporting cycle has started fresh from today (${today}). Previous task history has been archived.`,
+    };
+  }, [tasks, settings, templates, user?.id, token]);
 
   const skipTask = useCallback((id: string, reason?: string) => {
     updateTask(id, { status: 'skipped', skippedReason: reason !== undefined ? reason.trim() : '' });
@@ -1171,8 +1313,8 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Live Statistics Calculations
   const getDailyStats = useCallback(
     (dateISO: string): DailyStats => {
-      // STRICT CENTRAL RULE: IF date.isOffDay === true -> ZERO TASKS
-      if (isDateOffDay(dateISO)) {
+      // STRICT CENTRAL RULE: IF date.isOffDay === true OR prior to startDate -> ZERO TASKS
+      if (isDateOffDay(dateISO) || (settings.startDate && dateISO < settings.startDate)) {
         return {
           total: 0,
           completed: 0,
@@ -1186,7 +1328,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         };
       }
 
-      const dayTasks = tasks.filter(t => t.date === dateISO);
+      const dayTasks = tasks.filter(t => t.date === dateISO && (!settings.startDate || t.date >= settings.startDate));
       const total = dayTasks.length;
       const completed = dayTasks.filter(t => t.status === 'completed').length;
       const pending = dayTasks.filter(t => t.status === 'planned').length;
@@ -1209,12 +1351,14 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         completionRate,
       };
     },
-    [tasks]
+    [tasks, settings.startDate, isDateOffDay]
   );
 
   const getWeeklyStats = useCallback(
     (startISO: string, endISO: string): PeriodStats => {
-      const periodTasks = tasks.filter(t => t.date >= startISO && t.date <= endISO);
+      const periodTasks = tasks.filter(
+        t => t.date >= startISO && t.date <= endISO && (!settings.startDate || t.date >= settings.startDate)
+      );
       const total = periodTasks.length;
       const completed = periodTasks.filter(t => t.status === 'completed').length;
       const pending = periodTasks.filter(t => t.status === 'planned' || t.status === 'in_progress').length;
@@ -1263,13 +1407,15 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         byRoutine,
       };
     },
-    [tasks]
+    [tasks, settings.startDate]
   );
 
   const getMonthlyStats = useCallback(
     (monthISO: string): MonthlyStats => {
       const prefix = `${monthISO}-`;
-      const monthTasks = tasks.filter(t => t.date.startsWith(prefix));
+      const monthTasks = tasks.filter(
+        t => t.date.startsWith(prefix) && (!settings.startDate || t.date >= settings.startDate)
+      );
       const total = monthTasks.length;
       const completed = monthTasks.filter(t => t.status === 'completed').length;
       const pending = monthTasks.filter(t => t.status === 'planned' || t.status === 'in_progress').length;
@@ -1354,7 +1500,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         contentCompleted,
       };
     },
-    [tasks]
+    [tasks, settings.startDate]
   );
 
   // Memoized Live stats for current day, week, month
@@ -1466,6 +1612,8 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         addTemplate,
         deleteTemplate,
         updateSettings,
+        startFromToday,
+        isTaskActionable,
         saveWeeklyReflection,
         saveMonthlyReflection,
         syncTasks,

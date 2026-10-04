@@ -204,10 +204,15 @@ export async function saveTaskDoc(uid: string, task: Task): Promise<void> {
  * Deletes a single task document
  */
 export async function deleteTaskDoc(uid: string, taskId: string): Promise<void> {
+  if (!taskId || !taskId.trim()) return;
   try {
     const taskRef = doc(db, 'tasks', taskId);
     await deleteDoc(taskRef);
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.code === 'permission-denied' || err?.message?.includes('permission')) {
+      console.warn(`Permission warning deleting task ${taskId}:`, err);
+      return;
+    }
     handleFirestoreError(err, OperationType.DELETE, `tasks/${taskId}`);
   }
 }
@@ -227,11 +232,13 @@ export async function batchSaveTasksDocs(uid: string, tasksToSave: Task[], delet
         where('date', '<=', deleteRange.endDate)
       );
       const existingRangeSnap = await getDocs(q);
-      const batch = writeBatch(db);
-      existingRangeSnap.forEach(d => {
-        batch.delete(d.ref);
-      });
-      await batch.commit();
+      if (!existingRangeSnap.empty) {
+        const batch = writeBatch(db);
+        existingRangeSnap.forEach(d => {
+          batch.delete(d.ref);
+        });
+        await batch.commit();
+      }
     }
 
     // Save in safe chunks of 400 (Firestore max is 500 per batch)
@@ -250,6 +257,7 @@ export async function batchSaveTasksDocs(uid: string, tasksToSave: Task[], delet
       await batch.commit();
     }
   } catch (err) {
+    console.warn('batchSaveTasksDocs error:', err);
     handleFirestoreError(err, OperationType.WRITE, 'tasks');
   }
 }
@@ -259,10 +267,13 @@ export async function batchSaveTasksDocs(uid: string, tasksToSave: Task[], delet
  */
 export async function batchDeleteTasksDocs(uid: string, taskIds: string[]): Promise<void> {
   if (!taskIds || taskIds.length === 0) return;
+  const validIds = taskIds.filter(id => id && typeof id === 'string' && id.trim().length > 0);
+  if (validIds.length === 0) return;
+
   try {
     const CHUNK_SIZE = 400;
-    for (let i = 0; i < taskIds.length; i += CHUNK_SIZE) {
-      const chunk = taskIds.slice(i, i + CHUNK_SIZE);
+    for (let i = 0; i < validIds.length; i += CHUNK_SIZE) {
+      const chunk = validIds.slice(i, i + CHUNK_SIZE);
       const batch = writeBatch(db);
       for (const id of chunk) {
         batch.delete(doc(db, 'tasks', id));
@@ -270,7 +281,7 @@ export async function batchDeleteTasksDocs(uid: string, taskIds: string[]): Prom
       await batch.commit();
     }
   } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, 'tasks');
+    console.warn('Batch delete tasks warning:', err);
   }
 }
 

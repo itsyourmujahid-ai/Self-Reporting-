@@ -131,6 +131,19 @@ dataRouter.post('/tasks', (req: AuthenticatedRequest, res: Response): void => {
       return;
     }
 
+    // Backend Daily Task Completion Lock enforcement:
+    // Only tasks scheduled for current date may transition to completed!
+    const currentDate = now.slice(0, 10);
+    if (t.status === 'completed' && t.date !== currentDate) {
+      const existing = db.prepare('SELECT status FROM tasks WHERE id = ? AND user_id = ?').get(t.id, userId) as any;
+      if (!existing || existing.status !== 'completed') {
+        res.status(400).json({
+          error: `Daily Lock Enforcement: Only tasks scheduled for today (${currentDate}) can be completed. Future tasks are locked, and past tasks are historical.`,
+        });
+        return;
+      }
+    }
+
     db.prepare(`
       INSERT INTO tasks (
         id, user_id, title, date, status, priority, type,
@@ -243,13 +256,27 @@ dataRouter.post('/tasks/batch', (req: AuthenticatedRequest, res: Response): void
           updated_at = excluded.updated_at
       `);
 
+      const currentDate = now.slice(0, 10);
       for (const t of tasks) {
+        let taskStatus = t.status || 'planned';
+        let taskCompletedAt = t.completedAt || null;
+
+        // Backend Daily Task Completion Lock enforcement:
+        // Do not allow transitioning non-today tasks to 'completed'
+        if (taskStatus === 'completed' && t.date !== currentDate) {
+          const existing = db.prepare('SELECT status, completed_at FROM tasks WHERE id = ? AND user_id = ?').get(t.id, userId) as any;
+          if (!existing || existing.status !== 'completed') {
+            taskStatus = existing ? existing.status : 'planned';
+            taskCompletedAt = existing ? existing.completed_at : null;
+          }
+        }
+
         insertStmt.run(
           t.id,
           userId,
           t.title,
           t.date,
-          t.status || 'planned',
+          taskStatus,
           t.priority || 'medium',
           t.type || 'task',
           t.startTime || null,
@@ -261,7 +288,7 @@ dataRouter.post('/tasks/batch', (req: AuthenticatedRequest, res: Response): void
           t.recurrenceTag || null,
           t.templateId || null,
           t.actualMinutes || null,
-          t.completedAt || null,
+          taskCompletedAt,
           t.createdAt || now,
           now
         );
@@ -300,5 +327,38 @@ dataRouter.post('/reports', (req: AuthenticatedRequest, res: Response): void => 
   } catch (error) {
     console.error('Save report error:', error);
     res.status(500).json({ error: 'Failed to save report.' });
+  }
+});
+
+dataRouter.post('/start-from-today', (req: AuthenticatedRequest, res: Response): void => {
+  try {
+    const userId = req.user!.id;
+    const { startDate } = req.body;
+    const targetStartDate = startDate || new Date().toISOString().slice(0, 10);
+    const now = new Date().toISOString();
+
+    // 1. Delete all previous tasks strictly before targetStartDate
+    db.prepare('DELETE FROM tasks WHERE user_id = ? AND date < ?').run(userId, targetStartDate);
+
+    // 2. Persist startDate in user_settings
+    const settingsRow = db.prepare('SELECT settings_json FROM user_settings WHERE user_id = ?').get(userId) as { settings_json: string } | undefined;
+    let settings: any = {};
+    if (settingsRow) {
+      try { settings = JSON.parse(settingsRow.settings_json); } catch (e) {}
+    }
+    settings.startDate = targetStartDate;
+    settings.updatedAt = now;
+
+    db.prepare(`
+      INSERT INTO user_settings (user_id, settings_json, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at
+    `).run(userId, JSON.stringify(settings), now);
+
+    logActivity(userId, 'start_from_today', `Reporting cycle started fresh from ${targetStartDate}`);
+    res.json({ success: true, startDate: targetStartDate });
+  } catch (error) {
+    console.error('Start from today route error:', error);
+    res.status(500).json({ error: 'Failed to start from today.' });
   }
 });

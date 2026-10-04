@@ -115,7 +115,8 @@ function seedSuperAdmin() {
     const adminId = crypto.randomUUID();
     const email = 'admin@zaynhub.com';
     const salt = crypto.randomBytes(16).toString('hex');
-    const passwordHash = hashPassword('Admin@Zayn2026!', salt);
+    const adminInitialSecret = process.env.ADMIN_INITIAL_PASSWORD || crypto.randomBytes(32).toString('hex');
+    const passwordHash = hashPassword(adminInitialSecret, salt);
     const now = new Date().toISOString();
 
     db.prepare(`
@@ -131,7 +132,8 @@ function seedSuperAdmin() {
     if (!existingOwner) {
       const ownerId = crypto.randomUUID();
       const ownerSalt = crypto.randomBytes(16).toString('hex');
-      const ownerHash = hashPassword('Admin@Zayn2026!', ownerSalt);
+      const ownerInitialSecret = process.env.ADMIN_INITIAL_PASSWORD || crypto.randomBytes(32).toString('hex');
+      const ownerHash = hashPassword(ownerInitialSecret, ownerSalt);
       db.prepare(`
         INSERT INTO users (id, email, password_hash, salt, display_name, role, created_at, last_activity_at, status)
         VALUES (?, ?, ?, ?, ?, 'admin', ?, ?, 'active')
