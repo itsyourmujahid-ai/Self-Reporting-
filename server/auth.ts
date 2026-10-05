@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'node:crypto';
-import { db } from './db';
+import { db } from './db.ts';
+import { adminAuth } from '../src/lib/firebase-admin.ts';
+import { getOrCreateUser } from '../src/db/repository.ts';
 
 export interface AuthUser {
   id: string;
@@ -36,7 +38,11 @@ export function logActivity(userId: string, action: string, details?: string) {
   }
 }
 
-export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
+export async function requireAuth(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Authentication required. No Bearer token provided.' });
@@ -49,6 +55,37 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
     return;
   }
 
+  // 1. Try Firebase Admin ID Token verification first (Primary)
+  try {
+    const decodedToken = await adminAuth.verifyIdToken(token);
+    const email = decodedToken.email || '';
+    const displayName = (decodedToken.name as string) || email.split('@')[0] || 'User';
+    const isAdmin = email === 'admin@zaynhub.com' || email === 'itsyourmujahid@gmail.com';
+    const role: 'user' | 'admin' = isAdmin ? 'admin' : 'user';
+
+    // Synchronize user in PostgreSQL
+    const dbUser = await getOrCreateUser(decodedToken.uid, email, displayName, role);
+
+    if (dbUser.status === 'suspended') {
+      res.status(403).json({ error: 'This account has been suspended by an administrator.' });
+      return;
+    }
+
+    req.user = {
+      id: dbUser.id,
+      email: dbUser.email,
+      display_name: dbUser.displayName,
+      role: dbUser.role as 'user' | 'admin',
+      status: dbUser.status as 'active' | 'suspended',
+    };
+    req.token = token;
+    next();
+    return;
+  } catch (_firebaseErr) {
+    // Fall through to check local session
+  }
+
+  // 2. Fallback to local session check
   try {
     const now = new Date().toISOString();
     const session = db.prepare(`

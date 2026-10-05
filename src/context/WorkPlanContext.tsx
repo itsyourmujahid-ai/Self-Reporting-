@@ -30,6 +30,12 @@ import {
   clearAuthSession,
   exportAllData,
   importAllData,
+  apiSaveSettings,
+  apiSaveTemplates,
+  apiSaveTask,
+  apiDeleteTask,
+  apiBatchTasks,
+  apiSaveReport,
 } from '../utils/storage';
 import { auth, signOut, onAuthStateChanged } from '../firebase';
 import {
@@ -316,6 +322,15 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setWeeklyReportsState(workspace.weeklyReports);
             setMonthlyReportsState(workspace.monthlyReports);
 
+            // Synchronize real workspace data to Supabase database
+            apiSaveSettings(workspace.settings).catch(console.warn);
+            apiSaveTemplates(workspace.templates).catch(console.warn);
+            if (syncResult.synchronizedTasks.length > 0) {
+              apiBatchTasks(syncResult.synchronizedTasks).catch(console.warn);
+            }
+            workspace.weeklyReports.forEach(r => apiSaveReport(r.id, 'weekly', r.weekIdentifier, r).catch(console.warn));
+            workspace.monthlyReports.forEach(r => apiSaveReport(r.id, 'monthly', r.monthIdentifier, r).catch(console.warn));
+
             // Persist newly generated instances to Firestore
             if (syncResult.newTasksCreated.length > 0) {
               batchSaveTasksDocs(firebaseUser.uid, syncResult.newTasksCreated).catch(err => {
@@ -572,6 +587,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setTasksState(prev => [...prev, newTask]);
     if (user?.id) {
       saveTaskDoc(user.id, newTask);
+      apiSaveTask(newTask);
     }
     return newTask;
   }, [isDateOffDay, user?.id]);
@@ -624,6 +640,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       });
       if (targetDoc && user?.id) {
         saveTaskDoc(user.id, targetDoc);
+        apiSaveTask(targetDoc);
       }
       return nextList;
     });
@@ -633,6 +650,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setTasksState(prev => prev.filter(t => t.id !== id));
     if (user?.id) {
       deleteTaskDoc(user.id, id);
+      apiDeleteTask(id);
     }
   }, [user?.id]);
 
@@ -819,14 +837,20 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [updateTask]);
 
   const saveDailyNotes = useCallback((date: string, notes: string) => {
-    setSettingsState(prev => ({
-      ...prev,
-      dailyNotes: {
-        ...(prev.dailyNotes || {}),
-        [date]: notes,
-      },
-    }));
-  }, []);
+    setSettingsState(prev => {
+      const updated = {
+        ...prev,
+        dailyNotes: {
+          ...(prev.dailyNotes || {}),
+          [date]: notes,
+        },
+      };
+      if (user?.id) {
+        saveSettingsDoc(user.id, updated).catch(console.warn);
+      }
+      return updated;
+    });
+  }, [user?.id]);
 
   const completeFollowUpAndScheduleNext = useCallback(
     (sourceTaskId: string, nextDate: string, nextTime: string, nextTitle: string, notes?: string) => {
@@ -1154,6 +1178,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const updated = prev.map(t => (t.id === template.id ? template : t));
       if (user?.id) {
         saveTemplatesDoc(user.id, updated);
+        apiSaveTemplates(updated);
       }
       setTasksState(currentTasks => {
         const syncResult = synchronizeTasksWithTemplates(currentTasks, updated, settings, undefined, user?.id);
@@ -1178,6 +1203,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const updated = [...prev, newTmpl];
       if (user?.id) {
         saveTemplatesDoc(user.id, updated);
+        apiSaveTemplates(updated);
       }
       setTasksState(currentTasks => {
         const syncResult = synchronizeTasksWithTemplates(currentTasks, updated, settings, undefined, user?.id);
@@ -1198,6 +1224,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const updated = prev.filter(t => t.id !== id);
       if (user?.id) {
         saveTemplatesDoc(user.id, updated);
+        apiSaveTemplates(updated);
       }
       setTasksState(currentTasks => {
         const syncResult = synchronizeTasksWithTemplates(currentTasks, updated, settings, undefined, user?.id);
@@ -1219,6 +1246,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const merged = { ...prev, ...newSettings };
       if (user?.id) {
         saveSettingsDoc(user.id, merged);
+        apiSaveSettings(merged);
       }
       setTasksState(currentTasks => {
         const syncResult = synchronizeTasksWithTemplates(currentTasks, templates, merged, undefined, user?.id);
@@ -1256,6 +1284,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       });
       if (user?.id) {
         saveReportDoc(user.id, reportId, 'weekly', weekId, record);
+        apiSaveReport(reportId, 'weekly', weekId, record);
       }
     },
     [user?.id]
@@ -1279,6 +1308,7 @@ export const WorkPlanProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
     if (user?.id) {
       saveReportDoc(user.id, reportId, 'monthly', monthId, record);
+      apiSaveReport(reportId, 'monthly', monthId, record);
     }
   }, [user?.id]);
 
